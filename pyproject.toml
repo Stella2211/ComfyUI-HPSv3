@@ -10,3 +10,7 @@ dependencies = ["uv>=0.8"]
 [project.urls]
 Repository = "https://github.com/Stella2211/ComfyUI-HPSv3"
 Issues = "https://github.com/Stella2211/ComfyUI-HPSv3/issues"
+
+[tool.comfy]
+PublisherId = "stella"
+DisplayName = "ComfyUI-HPSv3"

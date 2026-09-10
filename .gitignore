@@ -15,3 +15,4 @@ build/
 *.log
 /models/
 /output/
+/node.zip
