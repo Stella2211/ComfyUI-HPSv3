@@ -134,6 +134,7 @@ class BackendTests(unittest.TestCase):
         command = popen.call_args.args[0]
         self.assertEqual(command, [str(runtime), str(ROOT / "download_model.py"), self.backend.DEFAULT_MODEL_REPO, str(staging)])
         self.assertNotIn("stdout", popen.call_args.kwargs)
+        self.assertIs(popen.call_args.kwargs["shell"], False)
         self.assertTrue(process.wait.called)
 
     def test_download_failure_keeps_staging_for_retry(self):
@@ -243,11 +244,15 @@ class BackendTests(unittest.TestCase):
         image_a = Image.new("RGB", (2, 2), "red")
         image_b = Image.new("RGB", (2, 2), "blue")
         with mock.patch.object(self.backend.subprocess, "Popen", side_effect=popen):
-            result = self.backend.HPSv3PPModel("model")._run("score", [image_a, image_b], prompts=["a", "b"])
+            result = self.backend.HPSv3PPModel("model")._run("score", [image_a, image_b], prompts=["a & $(echo injected); | < >", "b"])
         self.assertEqual(result, [1])
         request = captured["request"]
         self.assertEqual(request["operation"], "score")
-        self.assertEqual(request["prompts"], ["a", "b"])
+        self.assertEqual(request["prompts"], ["a & $(echo injected); | < >", "b"])
+        self.assertIs(captured["kwargs"]["shell"], False)
+        self.assertEqual(len(captured["command"]), 4)
+        self.assertEqual(captured["command"][:2], [str(runtime), str(ROOT / "worker.py")])
+        self.assertNotIn(request["prompts"][0], captured["command"])
         self.assertEqual([Path(path).name for path in request["images"]], ["0.png", "1.png"])
         env = captured["kwargs"]["env"]
         self.assertEqual({key: env[key] for key in ("HF_HUB_OFFLINE", "TRANSFORMERS_OFFLINE", "HF_HUB_DISABLE_TELEMETRY", "DO_NOT_TRACK")},

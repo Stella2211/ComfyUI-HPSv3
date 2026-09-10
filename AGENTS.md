@@ -2,7 +2,7 @@
 
 ## 目的と適用範囲
 
-このリポジトリは、HPSv3・HPSv3++のNF4モデルによる画像評価と画像からのプロンプト生成をComfyUIへ追加する拡張です。利用方法は[README.md](README.md)、公開手順は[PUBLISHING.md](PUBLISHING.md)、ライセンスの境界は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
+このリポジトリは、HPSv3・HPSv3++のNF4モデルによる画像評価と画像からのプロンプト生成をComfyUIへ追加する拡張です。利用方法は[README.md](README.md)、公開手順は本書の「Registry公開」、ライセンスの境界は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
 
 このガイドは拡張本体に適用します。サブモジュール内を扱う場合は、そのディレクトリの`AGENTS.md`も読んでください。作業履歴、一時的な審査状態、個人環境の絶対パスをこのファイルへ書き込まないでください。
 
@@ -90,5 +90,5 @@ git diff --check
 - Publisher IDは`stella`です。APIキーはGitHubのRepository Secret `REGISTRY_ACCESS_TOKEN`だけに保存し、コードやログに出さないでください。
 - 現在の`.github/workflows/publish.yml`は、`main`へのpushで`pyproject.toml`が変更されると公開処理を実行します。バージョン以外の編集でも起動する点に注意してください。開発中の編集は作業用ブランチで進め、公開時に未使用のバージョン番号へ更新します。
 - Registryの既存バージョンを上書きする前提で作業しないでください。GitHub Actionsの成功はアップロード成功であり、Registry側の処理完了とは別です。
-- 配布設定や依存先を変更した場合は、[PUBLISHING.md](PUBLISHING.md)のCLI検証とZIP生成を実行し、中身を確認します。`.comfyignore`による`third_party/`などの除外を維持し、上流コード・ローカル環境・機密情報を同梱しないでください。
+- 配布設定や依存先を変更した場合は、`uvx --from comfy-cli==1.20.0 comfy node validate`と`uvx --from comfy-cli==1.20.0 comfy node pack`を実行し、生成した`node.zip`の中身を確認します。`.comfyignore`による`third_party/`などの除外を維持し、上流コード・ローカル環境・機密情報を同梱しないでください。
 - 通常のコード・文書編集とリリースを区別し、依頼された作業範囲に公開が含まれている場合に公開手順を実行します。

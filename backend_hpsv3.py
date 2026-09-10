@@ -100,7 +100,7 @@ def _download_default_model():
     model_management.throw_exception_if_processing_interrupted()
     logger.info("HPSv3: downloading %s; partial files are kept for retry", DEFAULT_MODEL_REPO)
     # Inherit the console so Hugging Face progress is visible throughout the download.
-    process = subprocess.Popen(command, env=env, creationflags=flags)
+    process = subprocess.Popen(command, shell=False, env=env, creationflags=flags)
     try:
         while True:
             model_management.throw_exception_if_processing_interrupted()
@@ -191,7 +191,7 @@ class HPSv3Model:
             env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_HUB_DISABLE_TELEMETRY="1", DO_NOT_TRACK="1", PYTHONUTF8="1")
             command = [str(RUNTIME_PYTHON), str(ROOT / "worker_hpsv3.py"), str(request_path), str(result_path)]
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, creationflags=flags)
+            process = subprocess.Popen(command, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, creationflags=flags)
             try:
                 while True:
                     model_management.throw_exception_if_processing_interrupted()
