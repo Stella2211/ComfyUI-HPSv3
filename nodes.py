@@ -11,6 +11,7 @@ import folder_paths
 from comfy.cli_args import args
 
 from .backend import HPSv3PPModel, list_models
+from .backend_hpsv3 import HPSv3Model, list_models as list_hpsv3_models
 
 
 def _single(value, name):
@@ -56,10 +57,10 @@ def _to_tensor(image):
     return torch.from_numpy(array).unsqueeze(0)
 
 
-def _banner(image, score):
+def _banner(image, score, label_prefix="HPSv3++"):
     width, height = image.size
     font = ImageFont.load_default(size=max(10, min(28, width // 32)))
-    label = f"HPSv3++ score: {score:.4f}"
+    label = f"{label_prefix} score: {score:.4f}"
     label = "\n".join(textwrap.wrap(label, width=max(1, int((width - 8) / font.getlength("M")))))
     left, top, right, bottom = ImageDraw.Draw(image).multiline_textbbox((0, 0), label, font=font)
     bar_height = bottom - top + 12
@@ -69,7 +70,7 @@ def _banner(image, score):
     return banner
 
 
-def _save(image, filename_prefix, score, prompt, model_name, mode, batch_number, workflow_prompt, extra_pnginfo):
+def _save(image, filename_prefix, score, prompt, model_name, mode, batch_number, workflow_prompt, extra_pnginfo, metadata_key="hpsv3pp"):
     output_dir = folder_paths.get_output_directory()
     full_dir, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
         filename_prefix, output_dir, image.width, image.height
@@ -83,7 +84,7 @@ def _save(image, filename_prefix, score, prompt, model_name, mode, batch_number,
         for key, value in (extra_pnginfo or {}).items():
             metadata.add_text(key, json.dumps(value))
         if mode in ("metadata", "both"):
-            metadata.add_text("hpsv3pp", json.dumps({
+            metadata.add_text(metadata_key, json.dumps({
                 "model": model_name, "score": score, "prompt": prompt,
             }, ensure_ascii=False))
     filename = filename.replace("%batch_num%", str(batch_number))
@@ -116,6 +117,9 @@ class HPSv3PPScore:
     RETURN_NAMES = ("images", "scores")
     FUNCTION = "score"
     CATEGORY = "HPSv3++"
+    SCORE_LABEL = "HPSv3++"
+    METADATA_KEY = "hpsv3pp"
+    FILENAME_DEFAULT = "HPSv3pp"
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -125,8 +129,8 @@ class HPSv3PPScore:
             "prompt": ("STRING", {"multiline": True, "default": ""}),
             "score_mode": (["banner", "metadata", "both"], {"default": "banner"}),
             "filename_prefix": ("STRING", {
-                "default": "HPSv3pp",
-                "tooltip": "Output folder and filename prefix. Supports ComfyUI substitutions, e.g. %date:yyyy%/%date:MM%/%date:dd%/HPSv3pp.",
+                "default": cls.FILENAME_DEFAULT,
+                "tooltip": f"Output folder and filename prefix. Supports ComfyUI substitutions, e.g. %date:yyyy%/%date:MM%/%date:dd%/{cls.FILENAME_DEFAULT}.",
             }),
         }, "hidden": {"workflow_prompt": "PROMPT", "extra_pnginfo": "EXTRA_PNGINFO"}}
 
@@ -152,14 +156,44 @@ class HPSv3PPScore:
             raise ValueError(f"model returned {len(scores)} scores for {len(pil_images)} images")
         scores = [float(score) for score in scores]
         if not all(math.isfinite(score) for score in scores):
-            raise ValueError("HPSv3++ returned a non-finite score")
+            raise ValueError(f"{self.SCORE_LABEL} returned a non-finite score")
         workflow_prompt = _single(workflow_prompt, "workflow_prompt")
         extra_pnginfo = _single(extra_pnginfo, "extra_pnginfo")
-        rendered = [_banner(image, score) if score_mode in ("banner", "both") else image for image, score in zip(pil_images, scores)]
+        rendered = [_banner(image, score, self.SCORE_LABEL) if score_mode in ("banner", "both") else image for image, score in zip(pil_images, scores)]
         ui_images = []
         for i, (image, score, text) in enumerate(zip(rendered, scores, prompts)):
-            ui_images.append(_save(image, filename_prefix, score, text, model.model_name, score_mode, i, workflow_prompt, extra_pnginfo))
+            ui_images.append(_save(image, filename_prefix, score, text, model.model_name, score_mode, i, workflow_prompt, extra_pnginfo, self.METADATA_KEY))
         return {"ui": {"images": ui_images}, "result": ([_to_tensor(image) for image in rendered], scores)}
+
+
+class HPSv3ModelLoader:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"model": (list_hpsv3_models(), {
+            "default": "HPSv3-bnb-NF4",
+            "tooltip": "HPSv3-bnb-NF4 downloads automatically from Hugging Face when missing (about 5.9 GB). Download progress appears in the ComfyUI console.",
+        })}}
+
+    RETURN_TYPES = ("HPSV3_MODEL",)
+    RETURN_NAMES = ("model",)
+    FUNCTION = "load"
+    CATEGORY = "HPSv3"
+
+    def load(self, model):
+        return (HPSv3Model(_single(model, "model")),)
+
+
+class HPSv3Score(HPSv3PPScore):
+    CATEGORY = "HPSv3"
+    SCORE_LABEL = "HPSv3"
+    METADATA_KEY = "hpsv3"
+    FILENAME_DEFAULT = "HPSv3"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        result = super().INPUT_TYPES()
+        result["required"]["model"] = ("HPSV3_MODEL",)
+        return result
 
 
 class HPSv3PPCaption:
@@ -168,6 +202,7 @@ class HPSv3PPCaption:
     RETURN_NAMES = ("captions",)
     FUNCTION = "caption"
     CATEGORY = "HPSv3++"
+    MODEL_LABEL = "HPSv3++"
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -187,18 +222,35 @@ class HPSv3PPCaption:
             raise ValueError("Provide at least one image.")
         captions = model.caption(pil_images, max_new_tokens)
         if len(captions) != len(pil_images) or any(not isinstance(text, str) or not text.strip() for text in captions):
-            raise ValueError("HPSv3++ did not return a non-empty caption for each image.")
+            raise ValueError(f"{self.MODEL_LABEL} did not return a non-empty caption for each image.")
         return (captions,)
+
+
+class HPSv3Caption(HPSv3PPCaption):
+    CATEGORY = "HPSv3"
+    MODEL_LABEL = "HPSv3"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        result = super().INPUT_TYPES()
+        result["required"]["model"] = ("HPSV3_MODEL",)
+        return result
 
 
 NODE_CLASS_MAPPINGS = {
     "HPSv3PPModelLoader": HPSv3PPModelLoader,
     "HPSv3PPScore": HPSv3PPScore,
     "HPSv3PPCaption": HPSv3PPCaption,
+    "HPSv3ModelLoader": HPSv3ModelLoader,
+    "HPSv3Score": HPSv3Score,
+    "HPSv3Caption": HPSv3Caption,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "HPSv3PPModelLoader": "HPSv3++ Model Loader",
     "HPSv3PPScore": "HPSv3++ Score",
     "HPSv3PPCaption": "HPSv3++ Caption",
+    "HPSv3ModelLoader": "HPSv3 Model Loader",
+    "HPSv3Score": "HPSv3 Score",
+    "HPSv3Caption": "HPSv3 Caption",
 }

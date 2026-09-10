@@ -1,5 +1,6 @@
 # Fetch pinned dependencies from their upstream repositories via install.py.
 # Never bundle the upstream HPSv3++ implementation in Registry archives.
 third_party/
+.venv-hpsv3/
 tests/
 .github/

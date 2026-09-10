@@ -3,12 +3,12 @@
   "last_link_id": 6,
   "nodes": [
     {
-      "id": 1, "type": "HPSv3PPModelLoader", "pos": [30, 40], "size": [320, 90],
+      "id": 1, "type": "HPSv3ModelLoader", "pos": [30, 40], "size": [320, 90],
       "flags": {}, "order": 0, "mode": 0,
       "inputs": [],
-      "outputs": [{"name": "model", "type": "HPSV3PP_MODEL", "links": [1, 2], "slot_index": 0}],
-      "properties": {"Node name for S&R": "HPSv3PPModelLoader"},
-      "widgets_values": ["HPSv3-PlusPlus-bnb-NF4"]
+      "outputs": [{"name": "model", "type": "HPSV3_MODEL", "links": [1, 2], "slot_index": 0}],
+      "properties": {"Node name for S&R": "HPSv3ModelLoader"},
+      "widgets_values": ["HPSv3-bnb-NF4"]
     },
     {
       "id": 2, "type": "LoadImage", "pos": [30, 190], "size": [320, 320],
@@ -22,21 +22,21 @@
       "widgets_values": ["example.png", "image"]
     },
     {
-      "id": 3, "type": "HPSv3PPCaption", "pos": [430, 40], "size": [310, 130],
+      "id": 3, "type": "HPSv3Caption", "pos": [430, 40], "size": [310, 130],
       "flags": {}, "order": 2, "mode": 0,
       "inputs": [
-        {"name": "model", "type": "HPSV3PP_MODEL", "link": 1},
+        {"name": "model", "type": "HPSV3_MODEL", "link": 1},
         {"name": "images", "type": "IMAGE", "link": 3}
       ],
       "outputs": [{"name": "captions", "type": "STRING", "links": [5, 6], "slot_index": 0}],
-      "properties": {"Node name for S&R": "HPSv3PPCaption"},
+      "properties": {"Node name for S&R": "HPSv3Caption"},
       "widgets_values": [96]
     },
     {
-      "id": 4, "type": "HPSv3PPScore", "pos": [820, 40], "size": [360, 420],
+      "id": 4, "type": "HPSv3Score", "pos": [820, 40], "size": [360, 420],
       "flags": {}, "order": 3, "mode": 0,
       "inputs": [
-        {"name": "model", "type": "HPSV3PP_MODEL", "link": 2},
+        {"name": "model", "type": "HPSV3_MODEL", "link": 2},
         {"name": "images", "type": "IMAGE", "link": 4},
         {"name": "prompt", "type": "STRING", "link": 5, "widget": {"name": "prompt"}}
       ],
@@ -44,8 +44,8 @@
         {"name": "images", "type": "IMAGE", "links": null},
         {"name": "scores", "type": "FLOAT", "links": null}
       ],
-      "properties": {"Node name for S&R": "HPSv3PPScore"},
-      "widgets_values": ["", "banner", "HPSv3pp"]
+      "properties": {"Node name for S&R": "HPSv3Score"},
+      "widgets_values": ["", "banner", "HPSv3"]
     },
     {
       "id": 5, "type": "PreviewAny", "pos": [430, 230], "size": [340, 280],
@@ -58,8 +58,8 @@
     }
   ],
   "links": [
-    [1, 1, 0, 3, 0, "HPSV3PP_MODEL"],
-    [2, 1, 0, 4, 0, "HPSV3PP_MODEL"],
+    [1, 1, 0, 3, 0, "HPSV3_MODEL"],
+    [2, 1, 0, 4, 0, "HPSV3_MODEL"],
     [3, 2, 0, 3, 1, "IMAGE"],
     [4, 2, 0, 4, 1, "IMAGE"],
     [5, 3, 0, 4, 2, "STRING"],

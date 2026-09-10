@@ -2,7 +2,7 @@
 
 ## 目的と適用範囲
 
-このリポジトリは、HPSv3++のNF4モデルによる画像評価と画像からのプロンプト生成をComfyUIへ追加する拡張です。利用方法は[README.md](README.md)、公開手順は[PUBLISHING.md](PUBLISHING.md)、ライセンスの境界は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
+このリポジトリは、HPSv3・HPSv3++のNF4モデルによる画像評価と画像からのプロンプト生成をComfyUIへ追加する拡張です。利用方法は[README.md](README.md)、公開手順は[PUBLISHING.md](PUBLISHING.md)、ライセンスの境界は[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)を参照してください。
 
 このガイドは拡張本体に適用します。サブモジュール内を扱う場合は、そのディレクトリの`AGENTS.md`も読んでください。作業履歴、一時的な審査状態、個人環境の絶対パスをこのファイルへ書き込まないでください。
 
@@ -13,7 +13,9 @@
 | `__init__.py` | ノードの登録情報と`WEB_DIRECTORY`をComfyUIへ公開 |
 | `nodes.py` | Model Loader・Score・Captionの入出力、画像変換、スコア表示、PNG保存 |
 | `backend.py` | モデル探索と検証、ComfyUIのGPUメモリ退避、専用プロセスの実行・キャンセル・後片付け |
+| `backend_hpsv3.py` | HPSv3用のモデル探索・検証・取得と専用プロセスの制御 |
 | `worker.py` | 専用Python環境で推論を実行し、結果と警告をJSONで返す |
+| `worker_hpsv3.py` | HPSv3の専用環境でScore・Captionを実行 |
 | `download_model.py` | 専用Python環境で標準モデルの最新の`main`を取得 |
 | `install.py` | 固定したサブモジュールの取得と、uvによる専用環境のセットアップ |
 | `web/filename_prefix.js` | キュー送信時のファイル名・日付置換 |
@@ -30,6 +32,7 @@ Model Loaderは標準モデルが未配置なら取得し、モデル名を保�
 - 拡張本体のPython要件は`pyproject.toml`、推論環境の依存関係はサブモジュールの`hpsv3pp/pyproject.toml`と`uv.lock`が管理します。`install.py`は拡張直下の`.venv`へPython 3.12の推論環境を構築します。
 - ComfyUI本体のPyTorch・Transformersを置き換えたり、重い推論依存関係を拡張本体の`requirements.txt`へ移したりしないでください。`requirements.txt`と本体の`project.dependencies`は整合させてください。
 - 推論にはBF16対応のNVIDIA CUDA GPUと対応ドライバーが必要です。具体的な環境条件はREADMEと固定依存先を確認してください。
+- HPSv3は`hpsv3/pyproject.toml`と`uv.lock`に従って`.venv-hpsv3`へセットアップします。HPSv3++の`.venv`とはTransformersの要件が異なるため、統合しないでください。モデル配置先・登録名は`hpsv3`、接続型は`HPSV3_MODEL`です。
 
 以下のコマンドは拡張のルートで実行します。初回セットアップはPython・依存パッケージをダウンロードしますが、モデル重みは取得しません。
 

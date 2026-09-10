@@ -4,7 +4,7 @@ import { applyTextReplacements } from "../../scripts/utils.js";
 app.registerExtension({
     name: "ComfyUI-HPSv3.FilenamePrefix",
     async beforeRegisterNodeDef(nodeType, nodeData) {
-        if (nodeData.name !== "HPSv3PPScore") return;
+        if (nodeData.name !== "HPSv3PPScore" && nodeData.name !== "HPSv3Score") return;
 
         const onNodeCreated = nodeType.prototype.onNodeCreated;
         nodeType.prototype.onNodeCreated = function () {

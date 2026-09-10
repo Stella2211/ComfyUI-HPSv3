@@ -1,12 +1,17 @@
 # ComfyUI-HPSv3
 
-HPSv3++のNF4モデルを使い、画像とプロンプトの評価・画像からのプロンプト生成をローカルで行うComfyUI拡張です。
+HPSv3・HPSv3++のNF4モデルを使い、画像とプロンプトの評価・画像からのプロンプト生成をローカルで行うComfyUI拡張です。どちらも私が作成した[hpsv3-4bit](https://github.com/Stella2211/hpsv3-4bit)を使用します。
 
 | ノード | 入力 | 動作・出力 |
 | --- | --- | --- |
 | HPSv3++ Model Loader | モデルフォルダ | 標準モデルが未配置なら自動取得し、2つの処理ノードで使うモデル設定を出力 |
 | HPSv3++ Score | モデル、画像、プロンプト | スコア付きPNGを保存・プレビューし、IMAGEとFLOATを出力 |
 | HPSv3++ Caption | モデル、画像 | 画像ごとに生成したプロンプトをSTRINGとして出力 |
+| HPSv3 Model Loader | モデルフォルダ | HPSv3の標準NF4モデルが未配置なら自動取得し、モデル設定を出力 |
+| HPSv3 Score | HPSv3モデル、画像、プロンプト | スコア付きPNGを保存・プレビューし、IMAGEとFLOATを出力 |
+| HPSv3 Caption | HPSv3モデル、画像 | 画像ごとに生成したプロンプトをSTRINGとして出力 |
+
+HPSv3はQwen2-VL、HPSv3++はQwen3-VLベースで互換性がないため、ノードとモデル接続型を分けています。同じ系列のModel LoaderをScore・Captionへ接続してください。既存のHPSv3++ワークフローはそのまま使えます。
 
 ## 動作環境
 
@@ -14,7 +19,7 @@ HPSv3++のNF4モデルを使い、画像とプロンプトの評価・画像か�
 - CPU・AMD・Apple GPUには対応していません。
 - CUDA 13.0対応のNVIDIAドライバー。
 - ComfyUI、Git。
-- モデル重み約6.5GBに加え、専用Python環境とインストール用キャッシュの空き容量。
+- モデル重みはHPSv3が約5.9GB、HPSv3++が約6.5GB。加えて専用Python環境とインストール用キャッシュの空き容量。
 
 ## インストール
 
@@ -31,7 +36,11 @@ ComfyUI-Managerが使える状態で始めます。Managerが表示されない�
 5. インストール完了まで待ちます。初回は専用Python環境とCUDA対応PyTorchなどを取得するため、時間とディスク容量が必要です。エラーが出た場合はComfyUIのターミナル／ログを確認してください。
 6. Managerの案内に従ってComfyUIを再起動し、必要に応じてブラウザーを再読み込みします。その後、下の「インストールを確認する」へ進みます。
 
-セットアップでは拡張内の`.venv`に推論用環境を作成します。ComfyUI本体のPyTorch・Transformersは変更しません。モデル重みはこの段階では取得しません。
+セットアップでは拡張内の`.venv`にHPSv3++用、`.venv-hpsv3`にHPSv3用の推論環境を作成します。Transformersの要件が異なるため（v3: 4.46.3、v3++: 4.57.0）、環境を共有しません。ComfyUI本体のPyTorch・Transformersは変更しません。モデル重みはこの段階では取得しません。
+
+既存インストールへHPSv3対応を追加する場合も、更新後にManagerのFixまたは`uv run --no-project python install.py`で専用環境を追加し、ComfyUIを再起動してください。
+
+HPSv3の4bit推論では、画像入力が誤って整数へ変換される問題を修正した推論ラッパーを使用します。既存のNF4モデル重みは再取得不要です。修正前のラッパーで生成したHPSv3のCaption・Scoreは再実行してください。
 
 UIの詳細は[新UIの操作ガイド](https://docs.comfy.org/manager/pack-management)または[旧UIの操作ガイド](https://docs.comfy.org/manager/legacy-ui)を参照してください。新UIの検索・インストールはRegistry経由です。[Registryページ](https://registry.comfy.org/nodes/comfyui-hpsv3)で利用可能なバージョンがあるか確認し、検索できない場合はComfyUI・Managerを更新して再起動してください。Registryで公開処理中のバージョンは、インストール候補に現れるまで待つ必要があります。
 
@@ -45,7 +54,23 @@ cd ComfyUI-HPSv3
 uv run --no-project python install.py
 ```
 
-### モデルの自動ダウンロード（共通）
+### HPSv3のモデル取得と実行
+
+**HPSv3 Model Loader**で`HPSv3-bnb-NF4`を選び、**HPSv3 Score**または**HPSv3 Caption**へ接続します。[HPSv3の評価サンプル](examples/hpsv3_score.json)も利用できます。Load Imageで画像を選び、Scoreの`prompt`を入力して実行してください。
+
+未配置なら[`stella221125/HPSv3-bnb-NF4`](https://huggingface.co/stella221125/HPSv3-bnb-NF4)を`ComfyUI/models/hpsv3/HPSv3-bnb-NF4/`へ自動取得します。統合済みNF4モデルを使うため、ベースモデルや元の報酬チェックポイントを別途配置・変換する必要はありません。
+
+手動配置する場合は、セットアップ後に拡張フォルダで以下を実行します。
+
+```sh
+uv run --no-project --python .venv-hpsv3 hf download stella221125/HPSv3-bnb-NF4 --local-dir ../../models/hpsv3/HPSv3-bnb-NF4
+```
+
+重みだけでなく、モデルのconfig・reward_config・トークナイザー・プロセッサーを含む一式が必要です。ダウンロードの進捗表示・再試行・取得済みモデルの再利用はHPSv3++と同じです。推論はローカルファイルだけを使用します。
+
+画像から生成した説明で評価する場合は、[HPSv3のCaption→Scoreサンプル](examples/hpsv3_caption_and_score.json)を読み込んでください。同じ画像をCaption・Scoreへ渡し、Captionの出力をScoreの`prompt`へ接続しています。Load Imageで画像を選ぶだけで実行できます。
+
+### HPSv3++のモデルの自動ダウンロード
 
 Model Loaderで`HPSv3-PlusPlus-bnb-NF4`を選び、ScoreまたはCaptionにつないだワークフローを実行してください。モデルが未配置でも選択肢に表示されます。初回実行時にHugging Faceの[`stella221125/HPSv3-PlusPlus-bnb-NF4`](https://huggingface.co/stella221125/HPSv3-PlusPlus-bnb-NF4)からモデル一式を取得します。
 
@@ -95,7 +120,7 @@ uv run --no-project --python .venv hf download stella221125/HPSv3-PlusPlus-bnb-N
 3. `score_mode`を選び、実行します。
 
 - `banner`: 画像上部に白い余白を追加し、スコアを表示します。元画像は覆いません。
-- `metadata`: 画像に文字を描かず、PNGの`hpsv3pp`テキスト項目へJSON形式でモデル名・スコア・評価プロンプトを保存します。
+- `metadata`: 画像に文字を描かず、PNGの`hpsv3pp`（HPSv3の場合は`hpsv3`）テキスト項目へJSON形式でモデル名・スコア・評価プロンプトを保存します。
 - `both`: 画像上部にスコアを表示し、同じPNGのメタデータにもモデル名・スコア・評価プロンプトを保存します。
 
 標準のSave Imageと同じ日付・ノード値の置換を利用できます。例えば、`%date:yyyy%/%date:MM%/%date:dd%/HPSv3pp`は`output/2026/09/08/HPSv3pp_00001_.png`のように保存できます。
@@ -109,6 +134,8 @@ uv run --no-project --python .venv hf download stella221125/HPSv3-PlusPlus-bnb-N
 Model Loaderと画像をCaptionへ接続します。`max_new_tokens`で生成の長さの上限を指定できます。元の生成プロンプトを復元する機能ではなく、画像をもとに短い説明を生成します。内容を確認してから利用してください。
 
 Captionの出力をScoreの`prompt`へ接続すれば、生成した説明を使って評価できます。複数画像の場合は両ノードへ同じ画像を同じ順序で渡してください。
+
+HPSv3・HPSv3++のCaption→Scoreサンプルには、生成した説明を表示する**Generated Caption**ノード（ComfyUI標準のPreview as Text）も接続しています。実行後、このノードでキャプションを確認できます。
 
 ## ライセンス
 
