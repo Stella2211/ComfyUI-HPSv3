@@ -1,0 +1,3 @@
+[submodule "third_party/hpsv3-4bit"]
+	path = third_party/hpsv3-4bit
+	url = https://github.com/Stella2211/hpsv3-4bit.git

@@ -1,0 +1,12 @@
+[project]
+name = "comfyui-hpsv3"
+version = "0.1.0"
+description = "Local HPSv3++ NF4 image scoring and prompt generation for ComfyUI"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [{name = "stella"}]
+dependencies = ["uv>=0.8"]
+
+[project.urls]
+Repository = "https://github.com/Stella2211/ComfyUI-HPSv3"
+Issues = "https://github.com/Stella2211/ComfyUI-HPSv3/issues"
