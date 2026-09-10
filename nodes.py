@@ -95,7 +95,9 @@ def _save(image, filename_prefix, score, prompt, model_name, mode, batch_number,
 class HPSv3PPModelLoader:
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"model": (list_models(),)}}
+        return {"required": {"model": (list_models(), {
+            "tooltip": "HPSv3-PlusPlus-bnb-NF4 downloads automatically from Hugging Face when missing (about 6.5 GB). Download progress appears in the ComfyUI console.",
+        })}}
 
     RETURN_TYPES = ("HPSV3PP_MODEL",)
     RETURN_NAMES = ("model",)

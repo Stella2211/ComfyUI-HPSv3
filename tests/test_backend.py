@@ -62,7 +62,134 @@ class BackendTests(unittest.TestCase):
     def test_list_models_discovers_only_configured_model_folders(self):
         self.make_model("z-model")
         (self.models / "incomplete").mkdir()
-        self.assertEqual(self.backend.list_models(), ["z-model"])
+        self.assertEqual(self.backend.list_models(), [self.backend.DEFAULT_MODEL_NAME, "z-model"])
+
+    def test_default_missing_model_can_be_downloaded_on_explicit_resolution(self):
+        downloaded = self.models / self.backend.DEFAULT_MODEL_NAME
+        downloaded.mkdir()
+        with mock.patch.object(self.backend, "_download_default_model", return_value=downloaded) as download:
+            with mock.patch.object(self.backend, "_validate_download", return_value=True):
+                self.assertEqual(self.backend.resolve_model(self.backend.DEFAULT_MODEL_NAME, allow_download=True), downloaded)
+        download.assert_called_once_with()
+
+    def test_inference_resolution_never_downloads_missing_default(self):
+        with mock.patch.object(self.backend, "_download_default_model") as download:
+            with self.assertRaises(FileNotFoundError):
+                self.backend.resolve_model(self.backend.DEFAULT_MODEL_NAME)
+        download.assert_not_called()
+
+    def test_unknown_and_traversal_names_never_download(self):
+        with mock.patch.object(self.backend, "_download_default_model") as download:
+            with self.assertRaises(FileNotFoundError):
+                self.backend.resolve_model("unknown", allow_download=True)
+            with self.assertRaises(ValueError):
+                self.backend.resolve_model("../outside", allow_download=True)
+            with self.assertRaises(ValueError):
+                self.backend.resolve_model(self.backend.DOWNLOAD_STAGING_NAME, allow_download=True)
+        download.assert_not_called()
+
+    def make_complete_download(self, path):
+        path.mkdir(parents=True, exist_ok=True)
+        (path / "config.json").write_text(json.dumps({"quantization_config": {
+            "quant_method": "bitsandbytes", "bnb_4bit_quant_type": "nf4", "load_in_4bit": True,
+        }}), encoding="utf-8")
+        for name in ("reward_config.json", "tokenizer_config.json", "preprocessor_config.json", "tokenizer.json"):
+            (path / name).write_text("{}", encoding="utf-8")
+        (path / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"x": "model-00001-of-00001.safetensors"}}), encoding="utf-8")
+        (path / "model-00001-of-00001.safetensors").write_bytes(b"weights")
+
+    def test_download_validation_rejects_missing_index_shard_and_escape(self):
+        path = self.models / ".staging"
+        self.make_complete_download(path)
+        self.assertTrue(self.backend._validate_download(path))
+        (path / "model-00001-of-00001.safetensors").write_bytes(b"")
+        self.assertFalse(self.backend._validate_download(path))
+        (path / "model-00001-of-00001.safetensors").unlink()
+        self.assertFalse(self.backend._validate_download(path))
+        self.make_complete_download(path)
+        (self.models / "outside.safetensors").write_bytes(b"outside weights")
+        (path / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {"x": "../outside.safetensors"}}), encoding="utf-8")
+        self.assertFalse(self.backend._validate_download(path))
+
+    def test_download_success_publishes_valid_staging_and_reuses_it(self):
+        runtime = Path(self.workspace.name) / "runtime.exe"
+        runtime.touch()
+        staging = self.models / self.backend.DOWNLOAD_STAGING_NAME
+        process = mock.Mock(returncode=0)
+        process.poll.return_value = 0
+
+        def wait(timeout=None):
+            if timeout is not None:
+                self.make_complete_download(staging)
+            return 0
+
+        process.wait.side_effect = wait
+        with mock.patch.object(self.backend, "RUNTIME_PYTHON", runtime), mock.patch.object(self.backend.subprocess, "Popen", return_value=process) as popen:
+            result = self.backend._download_default_model()
+            self.backend.HPSv3PPModel(self.backend.DEFAULT_MODEL_NAME)
+        self.assertEqual(result, self.models / self.backend.DEFAULT_MODEL_NAME)
+        self.assertTrue((result / "config.json").is_file())
+        self.assertFalse(staging.exists())
+        popen.assert_called_once()
+        command = popen.call_args.args[0]
+        self.assertEqual(command, [str(runtime), str(ROOT / "download_model.py"), self.backend.DEFAULT_MODEL_REPO, str(staging)])
+        self.assertNotIn("stdout", popen.call_args.kwargs)
+        self.assertTrue(process.wait.called)
+
+    def test_download_failure_keeps_staging_for_retry(self):
+        runtime = Path(self.workspace.name) / "runtime.exe"
+        runtime.touch()
+        staging = self.models / self.backend.DOWNLOAD_STAGING_NAME
+        self.make_complete_download(staging)
+        process = mock.Mock(returncode=2)
+        process.poll.return_value = 2
+        process.wait.return_value = 2
+        with mock.patch.object(self.backend, "RUNTIME_PYTHON", runtime), mock.patch.object(self.backend.subprocess, "Popen", return_value=process):
+            with self.assertRaisesRegex(RuntimeError, "download failed"):
+                self.backend._download_default_model()
+        self.assertTrue(staging.is_dir())
+        self.assertFalse((self.models / self.backend.DEFAULT_MODEL_NAME).exists())
+        process.returncode = 0
+        process.poll.return_value = 0
+        process.wait.return_value = 0
+        with mock.patch.object(self.backend, "RUNTIME_PYTHON", runtime), mock.patch.object(self.backend.subprocess, "Popen", return_value=process):
+            result = self.backend._download_default_model()
+        self.assertTrue((result / "model-00001-of-00001.safetensors").is_file())
+        self.assertFalse(staging.exists())
+
+    def test_download_cancellation_kills_and_reaps_child(self):
+        runtime = Path(self.workspace.name) / "runtime.exe"
+        runtime.touch()
+        process = mock.Mock(returncode=None)
+        process.poll.return_value = None
+        process.wait.side_effect = [__import__("subprocess").TimeoutExpired("download", 1), None]
+        self.model_management.throw_exception_if_processing_interrupted.side_effect = [None, None, KeyboardInterrupt]
+        with mock.patch.object(self.backend, "RUNTIME_PYTHON", runtime), mock.patch.object(self.backend.subprocess, "Popen", return_value=process):
+            with self.assertRaises(KeyboardInterrupt):
+                self.backend._download_default_model()
+        process.kill.assert_called_once_with()
+        self.assertGreaterEqual(process.wait.call_count, 2)
+
+    def test_download_cancellation_before_spawn_does_not_start_child(self):
+        runtime = Path(self.workspace.name) / "runtime.exe"
+        runtime.touch()
+        self.model_management.throw_exception_if_processing_interrupted.side_effect = KeyboardInterrupt
+        with mock.patch.object(self.backend, "RUNTIME_PYTHON", runtime), mock.patch.object(self.backend.subprocess, "Popen") as popen:
+            with self.assertRaises(KeyboardInterrupt):
+                self.backend._download_default_model()
+        popen.assert_not_called()
+
+    def test_download_refuses_existing_invalid_target_without_spawning(self):
+        runtime = Path(self.workspace.name) / "runtime.exe"
+        runtime.touch()
+        target = self.models / self.backend.DEFAULT_MODEL_NAME
+        target.mkdir()
+        (target / "user-file").write_text("keep", encoding="utf-8")
+        with mock.patch.object(self.backend, "RUNTIME_PYTHON", runtime), mock.patch.object(self.backend.subprocess, "Popen") as popen:
+            with self.assertRaisesRegex(ValueError, "exists but is incomplete"):
+                self.backend._download_default_model()
+        popen.assert_not_called()
+        self.assertEqual((target / "user-file").read_text(encoding="utf-8"), "keep")
 
     def test_resolve_model_rejects_escape_and_invalid_or_incomplete_models(self):
         self.make_model("valid")
