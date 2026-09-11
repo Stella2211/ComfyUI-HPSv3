@@ -12,12 +12,12 @@
     "hpsv3pp/__init__.py": "27408b832e132ca3cd826b1a9fd8b886f10a555e050226f71971d1de3223f189",
     "hpsv3pp/hub.py": "0d383651ef1001dcf7dbaf952e8b5982d2d19d314f0405eca3f9e1bb7b8e5879",
     "hpsv3pp/merged_config.py": "76c02e809e4d005bdf8a2caf0dbfeeb09aef4e430f1040eb8e8807d281b8b643",
-    "hpsv3pp/model.py": "191a9b2c2490eb0e81c8566b2811414d1f488665a00c52d7d2aa943b3c28b0fc",
-    "hpsv3pp/prompts.py": "9dadbabf38de544f7881b8dcd9bcc1a4a602653daf42106583434823e340175e",
-    "hpsv3pp/quantized.py": "f53363e59cacd6539e62e752fe840cb31e1c493999823fbe1eb91432886220c1",
-    "hpsv3pp/upstream.py": "69846abeb86fcaf49f74b62a3b0f884b7012f2264b02c5e684d9b4cbd15bfe00",
-    "runtime.py": "cbe11a1d6dcd05fd05d4d7e2d463f6e4705a1c20692e00a50c51c77de98b866d"
+    "hpsv3pp/model.py": "d1fcf661aa89c27d288cb54541157ddee55c3fd1d9ed95749c93cfe4547fc37d",
+    "hpsv3pp/prompts.py": "331fb7af124676b3570f6816dcfaa29c6d5446c4367820d9041b802efda9b661",
+    "hpsv3pp/quantized.py": "3f9f4ec88421dabdb8d664501fe1a07e0c6440e178d1c2393bf35636dfd35c99",
+    "hpsv3pp/upstream.py": "c122322018f5d9fdb7cfe3ea5d763f7db8b1f632112f30ae2b5e9be9f1f99c89",
+    "runtime.py": "042850bfdc61b874c15b546c41f25e5c426265775f6e794b1e17e8cde006b9e2"
   },
   "repository": "https://github.com/Stella2211/hpsv3-4bit",
-  "revision": "7441220c13ec1f5e31242e1558786d43d4dd4b58"
+  "revision": "7f0285b8c4bb1b2012c0109c11865057c0130862"
 }

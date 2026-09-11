@@ -34,10 +34,9 @@ class SourceProvisionError(RuntimeError):
     """The reviewed source is unavailable or failed validation."""
 
 
-def _cache_base() -> Path:
-    configured = os.environ.get("HPSV3PP_SOURCE_DIR")
-    if configured:
-        return Path(configured).expanduser()
+def _cache_base(source_directory: str | Path | None = None) -> Path:
+    if source_directory is not None:
+        return Path(source_directory).expanduser()
     return Path.home() / ".cache" / "hpsv3-4bit" / "upstream"
 
 
@@ -98,10 +97,8 @@ def _sha256(path: Path, limit: int) -> str:
     return digest.hexdigest()
 
 
-def _local_source() -> Path | None:
-    configured = os.environ.get("HPSV3PP_SOURCE_DIR")
-    candidates = [_source_root(Path(configured).expanduser())] if configured else [_source_root(_cache_base())]
-    for candidate in candidates:
+def _local_source(source_directory: str | Path | None = None) -> Path | None:
+    for candidate in (_source_root(_cache_base(source_directory)),):
         if _valid_root(candidate):
             return candidate
     return None
@@ -130,17 +127,16 @@ def _download(relative: str, destination: Path) -> None:
         raise SourceProvisionError(f"downloaded reviewed source failed hash validation: {relative}")
 
 
-def ensure_source(local_files_only: bool = False) -> Path:
+def ensure_source(local_files_only: bool = False, *, source_directory: str | Path | None = None) -> Path:
     """Return a validated source root, downloading only the pinned files if needed."""
-    local = _local_source()
+    local = _local_source(source_directory)
     if local is not None:
         return local
-    offline = os.environ.get("HF_HUB_OFFLINE", "").lower() in {"1", "true", "yes", "on"}
-    if local_files_only or offline:
+    if local_files_only:
         raise SourceProvisionError(
             f"Validated HPSv3++ source is unavailable in offline mode. {_REPAIR}"
         )
-    base = _cache_base().expanduser()
+    base = _cache_base(source_directory).expanduser()
     if _has_link(base):
         raise SourceProvisionError(f"source cache must not be a symlink: {base}")
     base = base.resolve()
@@ -183,8 +179,8 @@ def ensure_source(local_files_only: bool = False) -> Path:
     return target
 
 
-def _require_local_source() -> Path:
-    source = _local_source()
+def _require_local_source(source_directory: str | Path | None = None) -> Path:
+    source = _local_source(source_directory)
     if source is None:
         raise SourceProvisionError(
             f"Validated HPSv3++ source is unavailable. {_REPAIR}"
@@ -201,9 +197,9 @@ def _validated_file(source: Path, relative: str) -> tuple[Path, bytes]:
     return path, raw
 
 
-def load_model_module() -> ModuleType:
+def load_model_module(source_directory: str | Path | None = None) -> ModuleType:
     """Load the reviewed reward model module from validated local bytes only."""
-    source = _require_local_source()
+    source = _require_local_source(source_directory)
     path, _ = _validated_file(source, "hpsv3/model/qwen3vl_rm.py")
     path_key = hashlib.sha256(str(path.resolve()).encode("utf-8")).hexdigest()[:12]
     name = f"_hpsv3pp_reviewed_{COMMIT[:12]}_{path_key}"
@@ -233,9 +229,9 @@ def load_model_module() -> ModuleType:
     return module
 
 
-def load_prompts() -> dict[str, str]:
+def load_prompts(source_directory: str | Path | None = None) -> dict[str, str]:
     """Read prompt constants from the reviewed collator without importing it."""
-    source = _require_local_source()
+    source = _require_local_source(source_directory)
     path, raw = _validated_file(source, "hpsv3/dataset/data_collator_qwen.py")
     tree = ast.parse(raw.decode("utf-8"), filename=str(path))
     values: dict[str, str] = {}

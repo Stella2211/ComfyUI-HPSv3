@@ -1,9 +1,9 @@
 """Lazy access to exact prompt constants from the external source."""
 
 
-def load_prompts():
+def load_prompts(source_directory=None):
     from .upstream import load_prompts as _load_prompts
-    return _load_prompts()
+    return _load_prompts(source_directory)
 
 
 def __getattr__(name):

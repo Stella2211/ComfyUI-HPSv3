@@ -63,6 +63,7 @@ def load_model(
     device: str = "cuda",
     check_cancel: Callable[[], None] | None = None,
     processor_directory: str | Path | None = None,
+    source_directory: str | Path | None = None,
 ) -> HPSv3Session:
     """Load a local merged NF4 model and return an inference session.
 
@@ -79,7 +80,11 @@ def load_model(
         inferencer_class = HPSv3PPQuantizedInferencer
     else:
         raise ValueError(f"Unknown HPS model family: {family}")
-    options = {} if processor_directory is None else {"processor_directory": str(Path(processor_directory))}
+    options = {}
+    if processor_directory is not None:
+        options["processor_directory"] = str(Path(processor_directory))
+    if family == "hpsv3pp" and source_directory is not None:
+        options["source_directory"] = str(Path(source_directory))
     inferencer = inferencer_class.from_merged_dir(
         merged_dir=str(Path(directory)), device=str(device), check_cancel=check_cancel, **options
     )

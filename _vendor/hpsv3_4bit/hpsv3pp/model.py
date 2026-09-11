@@ -1,9 +1,9 @@
 """Lazy adapters for the unchanged upstream HPSv3++ reward classes."""
 
-def _compat_class(name):
+def _compat_class(name, source_directory=None):
     from .upstream import load_model_module
 
-    base = getattr(load_model_module(), name)
+    base = getattr(load_model_module(source_directory), name)
 
     class Compatible(base):
         _keep_in_fp32_modules_strict = ["rm_head", "cond_encoder", "film_gen"]
@@ -14,8 +14,8 @@ def _compat_class(name):
     return Compatible
 
 
-def get_reward_model_class(name="Qwen3VLRewardModelFiLMHybrid"):
-    return _compat_class(name)
+def get_reward_model_class(name="Qwen3VLRewardModelFiLMHybrid", source_directory=None):
+    return _compat_class(name, source_directory)
 
 
 def install_vision_interpolation_hook(model):

@@ -17,9 +17,18 @@ class InstallTests(unittest.TestCase):
     def test_hook_provisions_source_without_importing_comfy_nodes(self):
         provider = types.ModuleType("_vendor.hpsv3_4bit.hpsv3pp.upstream")
         provider.ensure_source = Mock(return_value=Path("verified-source"))
-        with patch.dict(sys.modules, {provider.__name__: provider}), patch("builtins.print"):
+        with patch.dict(sys.modules, {provider.__name__: provider}), patch("builtins.print"), \
+             patch("huggingface_hub.constants.HF_HUB_OFFLINE", False):
             installer.main()
-        provider.ensure_source.assert_called_once_with()
+        provider.ensure_source.assert_called_once_with(local_files_only=False)
+
+    def test_hook_preserves_hub_offline_setting(self):
+        provider = types.ModuleType("_vendor.hpsv3_4bit.hpsv3pp.upstream")
+        provider.ensure_source = Mock(return_value=Path("cached-source"))
+        with patch.dict(sys.modules, {provider.__name__: provider}), patch("builtins.print"), \
+             patch("huggingface_hub.constants.HF_HUB_OFFLINE", True):
+            installer.main()
+        provider.ensure_source.assert_called_once_with(local_files_only=True)
 
     def test_source_failure_is_reported_to_manager(self):
         provider = types.ModuleType("_vendor.hpsv3_4bit.hpsv3pp.upstream")

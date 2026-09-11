@@ -80,9 +80,11 @@ class HPSv3PPQuantizedInferencer:
     model: object
     processor: object
     device: str = "cuda"
+    source_directory: str | None = None
 
     @classmethod
-    def from_merged_dir(cls, merged_dir, device="cuda", check_cancel=None, processor_directory=None):
+    def from_merged_dir(cls, merged_dir, device="cuda", check_cancel=None, processor_directory=None,
+                        source_directory=None):
         check_cancel = check_cancel or (lambda: None)
         directory = _local_model_dir(merged_dir)
         check_cancel()
@@ -100,7 +102,7 @@ class HPSv3PPQuantizedInferencer:
         # needs the tokenizer's padding ID on the outer config for batches.
         config.pad_token_id = processor.tokenizer.pad_token_id
         config.use_cache = False
-        reward_model_class = get_reward_model_class()
+        reward_model_class = get_reward_model_class(source_directory=source_directory)
         model, info = reward_model_class.from_pretrained(
             str(directory), config=config, **settings,
             torch_dtype=torch.bfloat16, attn_implementation="sdpa", quantization_config=None,
@@ -116,12 +118,12 @@ class HPSv3PPQuantizedInferencer:
             if module is not None:
                 module.float()
         model.eval()
-        return cls(model, processor, str(device))
+        return cls(model, processor, str(device), source_directory)
 
     def prepare_batch(self, image_paths: Sequence, prompts: Sequence[str]):
         if not image_paths or len(image_paths) != len(prompts):
             raise ValueError("Provide a nonempty batch with one prompt per image.")
-        prompts_text = load_prompts()
+        prompts_text = load_prompts(self.source_directory)
         batch = _batch(self.processor, list(image_paths),
                        [prompts_text["INSTRUCTION"].format(text_prompt=prompt) + prompts_text["prompt_with_special_token"] for prompt in prompts], self.device)
         token_id = self.processor.tokenizer.convert_tokens_to_ids(SPECIAL_REWARD_TOKEN)
