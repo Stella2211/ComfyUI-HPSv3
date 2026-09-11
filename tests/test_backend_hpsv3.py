@@ -136,7 +136,7 @@ class BackendTests(unittest.TestCase):
         self.assertFalse(staging.exists())
         popen.assert_called_once()
         command = popen.call_args.args[0]
-        self.assertEqual(command, [str(runtime), str(ROOT / "download_model.py"), self.backend.DEFAULT_MODEL_REPO, str(staging)])
+        self.assertEqual(command, [str(runtime), "-I", "-X", "utf8", str(ROOT / "download_model.py"), self.backend.DEFAULT_MODEL_REPO, str(staging)])
         self.assertNotIn("stdout", popen.call_args.kwargs)
         self.assertIs(popen.call_args.kwargs["shell"], False)
         self.assertTrue(process.wait.called)
@@ -272,8 +272,8 @@ class BackendTests(unittest.TestCase):
 
         def popen(command, **kwargs):
             captured.update(command=command, kwargs=kwargs)
-            captured["request"] = json.loads(Path(command[2]).read_text(encoding="utf-8"))
-            Path(command[3]).write_text('{"result": [1], "warnings": []}', encoding="utf-8")
+            captured["request"] = json.loads(Path(command[5]).read_text(encoding="utf-8"))
+            Path(command[6]).write_text('{"result": [1], "warnings": []}', encoding="utf-8")
             return process
 
         self.backend.RUNTIME_PYTHON = runtime
@@ -286,8 +286,8 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(request["operation"], "score")
         self.assertEqual(request["prompts"], ["a & $(echo injected); | < >", "b"])
         self.assertIs(captured["kwargs"]["shell"], False)
-        self.assertEqual(len(captured["command"]), 4)
-        self.assertEqual(captured["command"][:2], [str(runtime), str(ROOT / "worker_hpsv3.py")])
+        self.assertEqual(len(captured["command"]), 7)
+        self.assertEqual(captured["command"][:5], [str(runtime), "-I", "-X", "utf8", str(ROOT / "worker_hpsv3.py")])
         self.assertNotIn(request["prompts"][0], captured["command"])
         self.assertEqual([Path(path).name for path in request["images"]], ["0.png", "1.png"])
         env = captured["kwargs"]["env"]
@@ -295,7 +295,38 @@ class BackendTests(unittest.TestCase):
                          {"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "HF_HUB_DISABLE_TELEMETRY": "1", "DO_NOT_TRACK": "1"})
         self.assertEqual(process.communicate.call_args_list[0].kwargs, {"timeout": 1})
         self.assertEqual(process.communicate.call_args_list[-1].args, ())
-        self.assertFalse(Path(captured["command"][2]).parent.exists())
+        self.assertFalse(Path(captured["command"][5]).parent.exists())
+
+    def test_real_child_ignores_inherited_python_paths(self):
+        self.make_model()
+        scripts = Path(self.workspace.name) / "scripts"
+        scripts.mkdir()
+        injected = Path(self.workspace.name) / "injected"
+        injected.mkdir()
+        marker = injected / "loaded.txt"
+        (injected / "sitecustomize.py").write_text(
+            "from pathlib import Path\nPath(__file__).with_name('loaded.txt').write_text('loaded')\n",
+            encoding="utf-8",
+        )
+        (scripts / "worker_hpsv3.py").write_text(
+            "import json, os, sys\nfrom pathlib import Path\n"
+            "request = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))\n"
+            "assert request['prompts'] == ['日本語 & $(echo example)']\n"
+            "assert os.environ['HF_HUB_OFFLINE'] == '1'\n"
+            "assert os.environ['TRANSFORMERS_OFFLINE'] == '1'\n"
+            "Path(sys.argv[2]).write_text(json.dumps({'result': [1.0]}), encoding='utf-8')\n",
+            encoding="utf-8",
+        )
+        with mock.patch.object(self.backend, "ROOT", scripts), \
+             mock.patch.object(self.backend, "RUNTIME_PYTHON", Path(sys.executable)), \
+             mock.patch.dict(os.environ, {
+                 "PYTHONPATH": str(injected), "PYTHONHOME": str(injected / "missing"),
+             }):
+            result = self.backend.HPSv3Model("model").score(
+                [Image.new("RGB", (1, 1))], ["日本語 & $(echo example)"]
+            )
+        self.assertEqual(result, [1.0])
+        self.assertFalse(marker.exists())
 
     def test_run_relays_worker_warnings_once_and_keeps_result_shape(self):
         self.make_model()
@@ -305,7 +336,7 @@ class BackendTests(unittest.TestCase):
         captured = {}
         def popen(command, **kwargs):
             captured["command"] = command
-            Path(command[3]).write_text('{"result": [0.75], "warnings": ["dtype mismatch"]}', encoding="utf-8")
+            Path(command[6]).write_text('{"result": [0.75], "warnings": ["dtype mismatch"]}', encoding="utf-8")
             return process
         with mock.patch.object(self.backend, "RUNTIME_PYTHON", runtime), \
              mock.patch.object(self.backend.subprocess, "Popen", side_effect=popen), \
@@ -313,7 +344,7 @@ class BackendTests(unittest.TestCase):
             result = self.backend.HPSv3Model("model").score([Image.new("RGB", (1, 1))], ["p"])
         self.assertEqual(result, [0.75])
         warning.assert_called_once_with("HPSv3: %s", "dtype mismatch")
-        self.assertFalse(Path(captured["command"][2]).parent.exists())
+        self.assertFalse(Path(captured["command"][5]).parent.exists())
 
     def test_run_reports_worker_failure_and_removes_temporary_data(self):
         self.make_model()
@@ -328,7 +359,7 @@ class BackendTests(unittest.TestCase):
              mock.patch.object(self.backend.subprocess, "Popen", side_effect=popen):
             with self.assertRaisesRegex(RuntimeError, r"(?s)inference failed:.*traceback"):
                 self.backend.HPSv3Model("model").score([Image.new("RGB", (1, 1))], ["p"])
-        self.assertFalse(Path(captured["command"][2]).parent.exists())
+        self.assertFalse(Path(captured["command"][5]).parent.exists())
 
     def test_run_kills_child_when_processing_is_interrupted(self):
         self.make_model()
@@ -344,7 +375,7 @@ class BackendTests(unittest.TestCase):
                 self.backend.HPSv3Model("model").score([Image.new("RGB", (1, 1))], ["p"])
         process.kill.assert_called_once_with()
         process.communicate.assert_called_once_with()
-        self.assertFalse(Path(captured["command"][2]).parent.exists())
+        self.assertFalse(Path(captured["command"][5]).parent.exists())
 
 
 class WorkerTests(unittest.TestCase):

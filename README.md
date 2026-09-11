@@ -38,6 +38,8 @@ ComfyUI-Managerが使える状態で始めます。Managerが表示されない�
 
 セットアップでは拡張内の`.venv`にHPSv3++用、`.venv-hpsv3`にHPSv3用の推論環境を作成します。Transformersの要件が異なるため（v3: 4.46.3、v3++: 4.57.0）、環境を共有しません。ComfyUI本体のPyTorch・Transformersは変更しません。モデル重みはこの段階では取得しません。
 
+モデル取得と推論の専用Pythonは隔離モードで起動します。親プロセスの`PYTHONPATH`・`PYTHONHOME`やユーザーのsite-packagesには依存せず、専用環境のパッケージを使用します。Hugging Faceの接続・プロキシ設定は引き継ぎ、推論時のオフライン設定を維持します。
+
 既存インストールへHPSv3対応を追加する場合も、更新後にManagerのFixまたは`uv run --no-project python install.py`で専用環境を追加し、ComfyUIを再起動してください。
 
 HPSv3の4bit推論では、画像入力が誤って整数へ変換される問題を修正した推論ラッパーを使用します。既存のNF4モデル重みは再取得不要です。修正前のラッパーで生成したHPSv3のCaption・Scoreは再実行してください。

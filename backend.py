@@ -89,11 +89,12 @@ def _download_default_model():
     if staging.is_symlink() or staging.resolve() != staging:
         raise RuntimeError("The HPSv3++ download staging path is a link; move it elsewhere before retrying.")
     root.mkdir(parents=True, exist_ok=True)
-    command = [str(RUNTIME_PYTHON), str(ROOT / "download_model.py"), DEFAULT_MODEL_REPO, str(staging)]
+    # Ignore inherited Python import paths; keep UTF-8 explicit in isolated mode.
+    command = [str(RUNTIME_PYTHON), "-I", "-X", "utf8", str(ROOT / "download_model.py"), DEFAULT_MODEL_REPO, str(staging)]
     if not RUNTIME_PYTHON.is_file():
         raise RuntimeError("HPSv3++ runtime is missing. Run install.py with uv or use Manager's Fix function, then restart ComfyUI.")
     env = os.environ.copy()
-    env.update(HF_HUB_DISABLE_TELEMETRY="1", DO_NOT_TRACK="1", PYTHONUTF8="1")
+    env.update(HF_HUB_DISABLE_TELEMETRY="1", DO_NOT_TRACK="1")
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     model_management.throw_exception_if_processing_interrupted()
     logger.info("HPSv3++: downloading %s; partial files are kept for retry", DEFAULT_MODEL_REPO)
@@ -181,8 +182,8 @@ class HPSv3PPModel:
             result_path = temp / "result.json"
             request_path.write_text(json.dumps(request, ensure_ascii=False), encoding="utf-8")
             env = os.environ.copy()
-            env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_HUB_DISABLE_TELEMETRY="1", DO_NOT_TRACK="1", PYTHONUTF8="1")
-            command = [str(RUNTIME_PYTHON), str(ROOT / "worker.py"), str(request_path), str(result_path)]
+            env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_HUB_DISABLE_TELEMETRY="1", DO_NOT_TRACK="1")
+            command = [str(RUNTIME_PYTHON), "-I", "-X", "utf8", str(ROOT / "worker.py"), str(request_path), str(result_path)]
             flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
             process = subprocess.Popen(command, shell=False, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, env=env, creationflags=flags)
             try:
