@@ -1,7 +1,8 @@
 import importlib.util
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import tempfile
 import unittest
+from unittest import mock
 
 
 spec = importlib.util.spec_from_file_location("vendor_runtime", Path(__file__).parents[1] / "scripts" / "vendor_runtime.py")
@@ -10,6 +11,20 @@ spec.loader.exec_module(vendor)
 
 
 class VendorRuntimeTests(unittest.TestCase):
+    def test_manifest_is_identical_with_windows_and_posix_path_ordering(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp)
+            for name in ("__init__.py", "LICENSE", "THIRD_PARTY_NOTICES.md"):
+                (source / name).write_text("fixture\n", encoding="utf-8")
+            manifests = []
+            for path_type in (PureWindowsPath, PurePosixPath):
+                def platform_sorted(paths):
+                    return sorted(paths, key=lambda path: path_type(path.as_posix()))
+
+                with mock.patch.object(vendor, "sorted", platform_sorted, create=True):
+                    manifests.append(vendor.snapshot(source, "a" * 40)["SOURCE.json"])
+            self.assertEqual(manifests[0], manifests[1])
+
     def test_snapshot_requires_revision_and_notices_and_detects_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "source"

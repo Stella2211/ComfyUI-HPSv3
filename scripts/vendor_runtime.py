@@ -39,7 +39,7 @@ def snapshot(source, revision):
         "revision": revision,
         "files": {name: hashlib.sha256(data).hexdigest() for name, data in files.items()},
     }
-    files["SOURCE.json"] = (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+    files["SOURCE.json"] = (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode("utf-8")
     return files
 
 
