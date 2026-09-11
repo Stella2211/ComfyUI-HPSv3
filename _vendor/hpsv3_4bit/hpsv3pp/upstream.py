@@ -17,7 +17,7 @@ import sys
 import uuid
 from pathlib import Path
 from types import ModuleType
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 COMMIT = "6a095f68ee98330bf22365f872ed609bd44a216f"
@@ -25,7 +25,7 @@ _FILES = {
     "hpsv3/model/qwen3vl_rm.py": ("1919a0ce0d36d9a66d79ccb2ab467ae6d0c059a38040f96b42a38392bbd1b675", 256 * 1024),
     "hpsv3/dataset/data_collator_qwen.py": ("d7babc902fcbbfecdbf47687866bf6d737bad56b7ba283685c03220836c0c9f1", 256 * 1024),
 }
-_REPOSITORY = "https://raw.githubusercontent.com/PlantPotatoOnMoon/HPSv3-PlusPlus"
+_REPOSITORY = "https://api.github.com/repos/PlantPotatoOnMoon/HPSv3-PlusPlus/contents"
 _TIMEOUT = 20.0
 _REPAIR = "Reinstall the extension in ComfyUI-Manager and restart, or rerun the standalone CLI with network access."
 
@@ -106,9 +106,12 @@ def _local_source(source_directory: str | Path | None = None) -> Path | None:
 
 def _download(relative: str, destination: Path) -> None:
     digest, limit = _FILES[relative]
-    url = f"{_REPOSITORY}/{COMMIT}/{relative}"
+    url = f"{_REPOSITORY}/{relative}?ref={COMMIT}"
     try:
-        request = Request(url, headers={"User-Agent": "hpsv3-4bit-source-provisioner"})
+        request = Request(url, headers={
+            "Accept": "application/vnd.github.raw+json",
+            "User-Agent": "hpsv3-4bit-source-provisioner",
+        })
         with urlopen(request, timeout=_TIMEOUT) as response, destination.open("wb") as handle:
             total = 0
             while True:
@@ -121,8 +124,32 @@ def _download(relative: str, destination: Path) -> None:
                 handle.write(block)
     except SourceProvisionError:
         raise
+    except HTTPError as exc:
+        headers = exc.headers or {}
+        retry_after = headers.get("Retry-After")
+        reset = headers.get("X-RateLimit-Reset")
+        remaining = headers.get("X-RateLimit-Remaining")
+        is_rate_limit = exc.code == 429 or (exc.code == 403 and (retry_after or remaining == "0"))
+        if is_rate_limit:
+            hint = []
+            if retry_after:
+                hint.append(f"Retry-After={retry_after}")
+            if reset:
+                hint.append(f"X-RateLimit-Reset={reset}")
+            suffix = f" ({', '.join(hint)})" if hint else ""
+            raise SourceProvisionError(
+                f"GitHub Contents API rate limit response for reviewed source ({relative}): "
+                f"HTTP {exc.code}{suffix}. Wait for the limit to reset before retrying. {_REPAIR}"
+            ) from exc
+        if exc.code == 403:
+            raise SourceProvisionError(
+                f"GitHub Contents API access denied for reviewed source ({relative}): HTTP 403. {_REPAIR}"
+            ) from exc
+        raise SourceProvisionError(
+            f"GitHub Contents API request failed for reviewed source ({relative}): HTTP {exc.code}"
+        ) from exc
     except (OSError, URLError) as exc:
-        raise SourceProvisionError(f"could not download reviewed HPSv3++ source ({relative}): {exc}") from exc
+        raise SourceProvisionError(f"could not fetch reviewed HPSv3++ source ({relative}): {exc}") from exc
     if _sha256(destination, limit) != digest:
         raise SourceProvisionError(f"downloaded reviewed source failed hash validation: {relative}")
 

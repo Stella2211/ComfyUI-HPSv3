@@ -15,9 +15,9 @@
     "hpsv3pp/model.py": "d1fcf661aa89c27d288cb54541157ddee55c3fd1d9ed95749c93cfe4547fc37d",
     "hpsv3pp/prompts.py": "331fb7af124676b3570f6816dcfaa29c6d5446c4367820d9041b802efda9b661",
     "hpsv3pp/quantized.py": "3f9f4ec88421dabdb8d664501fe1a07e0c6440e178d1c2393bf35636dfd35c99",
-    "hpsv3pp/upstream.py": "c122322018f5d9fdb7cfe3ea5d763f7db8b1f632112f30ae2b5e9be9f1f99c89",
+    "hpsv3pp/upstream.py": "a82faf874105cb4121f421b8aeaea94b03b04cab214ec35e59d280f6b6b31740",
     "runtime.py": "042850bfdc61b874c15b546c41f25e5c426265775f6e794b1e17e8cde006b9e2"
   },
   "repository": "https://github.com/Stella2211/hpsv3-4bit",
-  "revision": "7f0285b8c4bb1b2012c0109c11865057c0130862"
+  "revision": "e28d3ecb3bc60c96465774934cab1c397b2b4f13"
 }
