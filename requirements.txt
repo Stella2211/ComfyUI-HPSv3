@@ -1,1 +1,7 @@
-uv>=0.8
+transformers>=5.17,<5.18
+huggingface-hub>=1.0,<2
+accelerate>=1.0,<2
+bitsandbytes>=0.50.2,<0.51
+safetensors>=0.8
+qwen-vl-utils>=0.0.14,<0.1
+pillow>=10

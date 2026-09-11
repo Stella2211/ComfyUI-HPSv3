@@ -1,11 +1,11 @@
 [project]
 name = "comfyui-hpsv3"
-version = "0.3.0"
-description = "Local HPSv3++ NF4 image scoring and prompt generation for ComfyUI"
-requires-python = ">=3.10"
+version = "0.4.0"
+description = "Local HPSv3 and HPSv3++ NF4 image scoring and prompt generation for ComfyUI"
+requires-python = ">=3.12"
 license = {file = "LICENSE"}
 authors = [{name = "stella"}]
-dependencies = ["uv>=0.8"]
+dependencies = ["transformers>=5.17,<5.18", "huggingface-hub>=1.0,<2", "accelerate>=1.0,<2", "bitsandbytes>=0.50.2,<0.51", "safetensors>=0.8", "qwen-vl-utils>=0.0.14,<0.1", "pillow>=10"]
 
 [project.urls]
 Repository = "https://github.com/Stella2211/ComfyUI-HPSv3"

@@ -1,0 +1,23 @@
+{
+  "repository": "https://github.com/Stella2211/hpsv3-4bit",
+  "revision": "7441220c13ec1f5e31242e1558786d43d4dd4b58",
+  "files": {
+    "__init__.py": "e0bd1c5a58068416e7715a1c32ca6122fe470a2f9067403531540479de46c479",
+    "hpsv3/__init__.py": "e69224bb5fb0ccd5dc4d5f59a0da12e2401df1bbaf7cbe926801684e3b1b3b8f",
+    "hpsv3/hub.py": "0d383651ef1001dcf7dbaf952e8b5982d2d19d314f0405eca3f9e1bb7b8e5879",
+    "hpsv3/merged_config.py": "dd278a3e24e2c7c883313cf000ed42bf384a178dfee46d37f60c13959c5d7cd9",
+    "hpsv3/model.py": "17f4fddb1962201b147a26ab19fe92dd619a5a5465263d21e3e168a3a70b4e6f",
+    "hpsv3/quantized.py": "9349f6c2493de39fc7043b72b5ebf5dc432722c57e2215b1c5ff4af7fc0decaf",
+    "hpsv3pp/__init__.py": "27408b832e132ca3cd826b1a9fd8b886f10a555e050226f71971d1de3223f189",
+    "hpsv3pp/hub.py": "0d383651ef1001dcf7dbaf952e8b5982d2d19d314f0405eca3f9e1bb7b8e5879",
+    "hpsv3pp/merged_config.py": "76c02e809e4d005bdf8a2caf0dbfeeb09aef4e430f1040eb8e8807d281b8b643",
+    "hpsv3pp/model.py": "191a9b2c2490eb0e81c8566b2811414d1f488665a00c52d7d2aa943b3c28b0fc",
+    "hpsv3pp/prompts.py": "9dadbabf38de544f7881b8dcd9bcc1a4a602653daf42106583434823e340175e",
+    "hpsv3pp/quantized.py": "f53363e59cacd6539e62e752fe840cb31e1c493999823fbe1eb91432886220c1",
+    "hpsv3pp/upstream.py": "69846abeb86fcaf49f74b62a3b0f884b7012f2264b02c5e684d9b4cbd15bfe00",
+    "LICENSE": "e1d6f66a9a188fd44b17548d57be0df8990d0b0bc1e9aa187ca0c687f690821f",
+    "LICENSE-HPSv3.txt": "08a6056f6d93ee42f71ffb9df496efc46cd265a558ea4d942d89d0e1376bab07",
+    "runtime.py": "cbe11a1d6dcd05fd05d4d7e2d463f6e4705a1c20692e00a50c51c77de98b866d",
+    "THIRD_PARTY_NOTICES.md": "5a99b1c37f22932a19f19af392edc7e648adb6676fb08947d49112e8b033b2aa"
+  }
+}

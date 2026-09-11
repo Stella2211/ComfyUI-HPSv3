@@ -1,6 +1,6 @@
 # ComfyUI-HPSv3
 
-HPSv3・HPSv3++のNF4モデルを使い、画像とプロンプトの評価・画像からのプロンプト生成をローカルで行うComfyUI拡張です。どちらも私が作成した[hpsv3-4bit](https://github.com/Stella2211/hpsv3-4bit)を使用します。
+HPSv3・HPSv3++のNF4モデルを使い、画像とプロンプトの評価・画像からのプロンプト生成をローカルで行うComfyUI拡張です。
 
 | ノード | 入力 | 動作・出力 |
 | --- | --- | --- |
@@ -11,15 +11,15 @@ HPSv3・HPSv3++のNF4モデルを使い、画像とプロンプトの評価・�
 | HPSv3 Score | HPSv3モデル、画像、プロンプト | スコア付きPNGを保存・プレビューし、IMAGEとFLOATを出力 |
 | HPSv3 Caption | HPSv3モデル、画像 | 画像ごとに生成したプロンプトをSTRINGとして出力 |
 
-HPSv3はQwen2-VL、HPSv3++はQwen3-VLベースで互換性がないため、ノードとモデル接続型を分けています。同じ系列のModel LoaderをScore・Captionへ接続してください。既存のHPSv3++ワークフローはそのまま使えます。
+HPSv3とHPSv3++のモデルには互換性がありません。同じ系列のModel LoaderをScore・Captionへ接続してください。既存のHPSv3++ワークフローはそのまま使えます。
 
 ## 動作環境
 
 - BF16対応のNVIDIA CUDA GPU。12GB VRAMを目安にしてください。( 8GB でも動作する可能性はありますが未検証です。)
 - CPU・AMD・Apple GPUには対応していません。
-- CUDA 13.0対応のNVIDIAドライバー。
-- ComfyUI、Git。
-- モデル重みはHPSv3が約5.9GB、HPSv3++が約6.5GB。加えて専用Python環境とインストール用キャッシュの空き容量。
+- Python 3.12以降、Transformers 5.17.x。必要な依存パッケージはManagerが自動で導入します。
+- ComfyUIのPyTorch・CUDAに対応するNVIDIAドライバー。実機検証環境はCUDA 13.0です。
+- モデル重みはHPSv3が約5.9GB、HPSv3++が約6.5GB。ホスト環境の依存関係とモデル用の空き容量が必要です。PyTorch・torchvisionはComfyUIのものを使用し、置き換えません。
 
 ## インストール
 
@@ -31,29 +31,33 @@ ComfyUI-Managerが使える状態で始めます。Managerが表示されない�
 
 1. ComfyUIで**Manager**を開きます。新UIでは検索種別を**Node Pack**にします。旧UIでは**Install Nodes**からカスタムノードの一覧を開きます。表示名はManagerのバージョンや表示言語によって異なります。
 2. `ComfyUI-HPSv3`を検索します。見つからない場合は`hpsv3`でも検索し、「インストール済み」などの絞り込みを外してください。
-3. 対象の詳細を開き、リポジトリが[`Stella2211/ComfyUI-HPSv3`](https://github.com/Stella2211/ComfyUI-HPSv3)であることを確認します。Registry上のパッケージIDは`comfyui-hpsv3`、Publisher IDは`stella`です。
+3. 対象の詳細を開き、リポジトリが[`Stella2211/ComfyUI-HPSv3`](https://github.com/Stella2211/ComfyUI-HPSv3)であることを確認します。
 4. **Install**を押します。バージョンを選択する場合は、Registryで公開されている番号付きのバージョンを選んでください。新UIでは詳細の**Version**から選べます。
-5. インストール完了まで待ちます。初回は専用Python環境とCUDA対応PyTorchなどを取得するため、時間とディスク容量が必要です。エラーが出た場合はComfyUIのターミナル／ログを確認してください。
+5. インストール完了まで待ちます。初回はホスト環境へ依存パッケージを追加するため、時間が必要です。エラーが出た場合はComfyUIのターミナル／ログを確認してください。
 6. Managerの案内に従ってComfyUIを再起動し、必要に応じてブラウザーを再読み込みします。その後、下の「インストールを確認する」へ進みます。
 
-セットアップでは拡張内の`.venv`にHPSv3++用、`.venv-hpsv3`にHPSv3用の推論環境を作成します。Transformersの要件が異なるため（v3: 4.46.3、v3++: 4.57.0）、環境を共有しません。ComfyUI本体のPyTorch・Transformersは変更しません。モデル重みはこの段階では取得しません。
+必要なファイルはManagerが自動で取得します。インストール時にはGitHubへ、初回のモデル取得時にはHugging Faceへ接続します。追加のコマンド実行は不要です。インストールに失敗した場合は、接続を確認してManagerから再インストールしてください。
 
-モデル取得と推論の専用Pythonは隔離モードで起動します。親プロセスの`PYTHONPATH`・`PYTHONHOME`やユーザーのsite-packagesには依存せず、専用環境のパッケージを使用します。Hugging Faceの接続・プロキシ設定は引き継ぎ、推論時のオフライン設定を維持します。
+比較用途では同じモデルと環境を使ってください。モデルや依存パッケージの更新でスコアが変わる場合があります。
 
-既存インストールへHPSv3対応を追加する場合も、更新後にManagerのFixまたは`uv run --no-project python install.py`で専用環境を追加し、ComfyUIを再起動してください。
-
-HPSv3の4bit推論では、画像入力が誤って整数へ変換される問題を修正した推論ラッパーを使用します。既存のNF4モデル重みは再取得不要です。修正前のラッパーで生成したHPSv3のCaption・Scoreは再実行してください。
+既存インストールへ追加する場合は、Managerで依存関係を修復してからComfyUIを再起動してください。
 
 UIの詳細は[新UIの操作ガイド](https://docs.comfy.org/manager/pack-management)または[旧UIの操作ガイド](https://docs.comfy.org/manager/legacy-ui)を参照してください。新UIの検索・インストールはRegistry経由です。[Registryページ](https://registry.comfy.org/nodes/comfyui-hpsv3)で利用可能なバージョンがあるか確認し、検索できない場合はComfyUI・Managerを更新して再起動してください。Registryで公開処理中のバージョンは、インストール候補に現れるまで待つ必要があります。
 
 ### Gitで手動インストールする
 
-Managerを使わない場合は、[uv](https://docs.astral.sh/uv/getting-started/installation/)をインストールし、`ComfyUI/custom_nodes`で以下を実行してください。Managerですでにインストール済みなら、同じ拡張を別フォルダへ重複してcloneする必要はありません。
+Managerを使わない場合は、`ComfyUI/custom_nodes`で以下を実行して拡張を配置し、ComfyUIのPython環境へ`requirements.txt`の依存パッケージを導入してください。Managerですでにインストール済みなら、同じ拡張を別フォルダへ重複してcloneする必要はありません。
 
 ```sh
 git clone https://github.com/Stella2211/ComfyUI-HPSv3.git
 cd ComfyUI-HPSv3
-uv run --no-project python install.py
+uv pip install --python <ComfyUIのPython> -r requirements.txt
+```
+
+依存関係の導入後、次のコマンドでセットアップを完了します。Managerから導入した場合、この操作は不要です。
+
+```sh
+uv run --no-project --python <ComfyUIのPython> python install.py
 ```
 
 ### HPSv3のモデル取得と実行
@@ -62,13 +66,9 @@ uv run --no-project python install.py
 
 未配置なら[`stella221125/HPSv3-bnb-NF4`](https://huggingface.co/stella221125/HPSv3-bnb-NF4)を`ComfyUI/models/hpsv3/HPSv3-bnb-NF4/`へ自動取得します。統合済みNF4モデルを使うため、ベースモデルや元の報酬チェックポイントを別途配置・変換する必要はありません。
 
-手動配置する場合は、セットアップ後に拡張フォルダで以下を実行します。
+手動配置する場合は、Hugging Faceのモデルページからモデル一式をComfyUI/models/hpsv3/HPSv3-bnb-NF4/へ配置してください。
 
-```sh
-uv run --no-project --python .venv-hpsv3 hf download stella221125/HPSv3-bnb-NF4 --local-dir ../../models/hpsv3/HPSv3-bnb-NF4
-```
-
-重みだけでなく、モデルのconfig・reward_config・トークナイザー・プロセッサーを含む一式が必要です。ダウンロードの進捗表示・再試行・取得済みモデルの再利用はHPSv3++と同じです。推論はローカルファイルだけを使用します。
+重みだけでなく、モデルのconfig・reward_config・トークナイザー・プロセッサーを含む一式が必要です。推論はローカルファイルだけを使用します。
 
 画像から生成した説明で評価する場合は、[HPSv3のCaption→Scoreサンプル](examples/hpsv3_caption_and_score.json)を読み込んでください。同じ画像をCaption・Scoreへ渡し、Captionの出力をScoreの`prompt`へ接続しています。Load Imageで画像を選ぶだけで実行できます。
 
@@ -78,23 +78,13 @@ Model Loaderで`HPSv3-PlusPlus-bnb-NF4`を選び、ScoreまたはCaptionにつ�
 
 標準の保存先は`ComfyUI/models/hpsv3pp/HPSv3-PlusPlus-bnb-NF4/`です。初回はインターネット接続と約6.5GB以上の空き容量が必要で、進捗はComfyUIのターミナル／ログに表示されます。取得済みのモデルは再利用し、Score・Captionの推論は引き続きオフラインで行います。
 
-新規ダウンロード時はモデルリポジトリの最新の`main`を取得します。モデル更新のために拡張を再公開する必要はありません。取得済みモデルの自動更新は行わないため、更新版を取得したい場合は既存モデルフォルダを別の場所へ移してから再実行してください。
+新規ダウンロード時は公開されている最新のモデルを取得します。取得済みモデルの自動更新は行わないため、更新版を取得したい場合は既存モデルフォルダを別の場所へ移してから再実行してください。
 
 取得中にキャンセルした場合や通信に失敗した場合は、接続と空き容量を確認してワークフローを再実行してください。途中のデータは再試行用に保持し、ダウンロードと検証が完了するまではモデルとして使用しません。自動取得の対象は標準モデルのみです。
 
 ### 手動でモデルを配置する（任意）
 
-オフライン環境などで事前に取得したい場合は、以下のコマンドも利用できます。
-
-1. 以下のコマンドを使う場合は、ターミナルで`uv --version`を実行できることを確認します。見つからない場合は[uvの導入手順](https://docs.astral.sh/uv/getting-started/installation/)に従い、ターミナルを開き直してください。
-2. インストールされた拡張フォルダへ移動します。`ComfyUI/custom_nodes`内にある、`install.py`と`.venv`を含むフォルダです。Manager経由では`comfyui-hpsv3`、上のGit手順では`ComfyUI-HPSv3`など、導入方法によって名前が異なる場合があります。
-3. そのフォルダで以下を実行し、モデルリポジトリの全ファイルをダウンロードします。このコマンドはHugging Faceへアクセスします。
-
-```sh
-uv run --no-project --python .venv hf download stella221125/HPSv3-PlusPlus-bnb-NF4 --local-dir ../../models/hpsv3pp/HPSv3-PlusPlus-bnb-NF4
-```
-
-配置先は`ComfyUI/models/hpsv3pp/HPSv3-PlusPlus-bnb-NF4/`です。すでに[モデル一式](https://huggingface.co/stella221125/HPSv3-PlusPlus-bnb-NF4/tree/main)が手元にあれば、このフォルダへ配置しても構いません。重みだけでなく、`config.json`、`reward_config.json`、トークナイザー、プロセッサーなども必要です。
+オフライン環境では、Hugging Faceからモデル一式を取得して対応する`ComfyUI/models/hpsv3/`または`ComfyUI/models/hpsv3pp/`へ配置してください。`config.json`、`reward_config.json`、トークナイザー、プロセッサー、全safetensors shardが必要です。
 
 ### インストールを確認する
 
@@ -106,7 +96,7 @@ uv run --no-project --python .venv hf download stella221125/HPSv3-PlusPlus-bnb-N
 | 症状 | 確認すること |
 | --- | --- |
 | 再起動後もノードがない／読み込みエラーが出る | Managerで拡張が有効か確認し、ComfyUIの起動ログでこの拡張のエラーを確認します。 |
-| `HPSv3++ runtime is missing`と表示される | 専用環境のセットアップが完了していません。インストールログを確認し、Git・uvが使えるターミナルで拡張フォルダから`uv run --no-project python install.py`を実行した後、ComfyUIを再起動します。 |
+| `transformers`や`bitsandbytes`が見つからない | Managerでこの拡張の依存関係を修復または再インストールし、ComfyUIを再起動します。PyTorch・torchvisionは置き換えないでください。 |
 | モデルの自動ダウンロードが失敗する | インターネット接続、Hugging Faceへのアクセス、保存先の空き容量と書き込み権限を確認し、ワークフローを再実行します。詳細はComfyUIのターミナル／ログで確認してください。 |
 | 手動配置したモデルが不完全と表示される | 上記の配置先とモデル一式を確認します。既存の不完全なモデルは自動で上書きしません。必要なファイルを補うか、既存フォルダを別の場所へ移してから標準モデルの自動取得を試してください。 |
 | CUDA関連エラー／GPUメモリ不足が出る | 「動作環境」のGPU・ドライバー条件を確認し、他のGPU使用アプリを終了して再試行します。 |
@@ -138,7 +128,3 @@ Model Loaderと画像をCaptionへ接続します。`max_new_tokens`で生成の
 Captionの出力をScoreの`prompt`へ接続すれば、生成した説明を使って評価できます。複数画像の場合は両ノードへ同じ画像を同じ順序で渡してください。
 
 HPSv3・HPSv3++のCaption→Scoreサンプルには、生成した説明を表示する**Generated Caption**ノード（ComfyUI標準のPreview as Text）も接続しています。実行後、このノードでキャプションを確認できます。
-
-## ライセンス
-
-拡張自身のコードは[MIT](LICENSE)です。推論には私が作成した[hpsv3-4bit](https://github.com/Stella2211/hpsv3-4bit)を使用します。HPSv3++の実装をコピーしているわけではなく、hpsv3-4bitを経由したGitサブモジュールとして参照します。上流実装とモデル重みは別の条件が適用されるため、利用・再配布前に[第三者ライセンス情報](THIRD_PARTY_NOTICES.md)と各参照先を確認してください。

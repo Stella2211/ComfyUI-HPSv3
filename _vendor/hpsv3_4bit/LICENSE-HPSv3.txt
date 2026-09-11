@@ -1,12 +1,3 @@
-# Third-party notices
-
-This extension's own code is licensed under MIT. Model weights and referenced assets have their own terms.
-
-## MizzenAI/HPSv3 (MIT)
-
-The bundled `hpsv3_4bit` runtime reuses the HPSv3 reward model class and evaluation instructions derived from [MizzenAI/HPSv3](https://github.com/MizzenAI/HPSv3), upstream commit `bd0c5fcb5f587617b0169c07222ab78d01e2f3c2`. The copyright notice and MIT permission notice are reproduced here:
-
-```
 MIT License
 
 Copyright (c) 2024 HPSv3 Team
@@ -28,9 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-```
-
-## Model weights
-
-- [HPSv3-bnb-NF4](https://huggingface.co/stella221125/HPSv3-bnb-NF4) and [HPSv3-PlusPlus-bnb-NF4](https://huggingface.co/stella221125/HPSv3-PlusPlus-bnb-NF4) are downloaded separately at runtime. Follow each model repository's LICENSE, NOTICE, and usage terms.
-- The model files are not covered by this extension's MIT license. Users and distributors must review the model terms before redistribution.

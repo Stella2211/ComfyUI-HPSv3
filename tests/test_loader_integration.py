@@ -46,10 +46,8 @@ class LoaderIntegrationTests(unittest.TestCase):
             setattr(self, name, module)
 
     def test_empty_install_exposes_default_without_starting_download(self):
-        with mock.patch.object(self.backend.subprocess, "Popen") as popen:
-            choices = self.nodes.HPSv3PPModelLoader.INPUT_TYPES()["required"]["model"][0]
+        choices = self.nodes.HPSv3PPModelLoader.INPUT_TYPES()["required"]["model"][0]
         self.assertIn("HPSv3-PlusPlus-bnb-NF4", choices)
-        popen.assert_not_called()
         self.assertFalse(self.models.exists())
 
     def test_loader_downloads_once_and_returns_reusable_model_socket(self):
@@ -58,7 +56,7 @@ class LoaderIntegrationTests(unittest.TestCase):
 
         def download():
             model_path.mkdir(parents=True)
-            config = {"quantization_config": {
+            config = {"model_type": "qwen3_vl", "quantization_config": {
                 "quant_method": "bitsandbytes", "bnb_4bit_quant_type": "nf4", "load_in_4bit": True,
             }}
             (model_path / "config.json").write_text(json.dumps(config), encoding="utf-8")

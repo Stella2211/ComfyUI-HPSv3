@@ -17,3 +17,5 @@ build/
 /models/
 /output/
 /node.zip
+/third_party/
+/docs/

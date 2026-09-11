@@ -6,48 +6,45 @@
 
 このガイドは拡張本体に適用します。サブモジュール内を扱う場合は、そのディレクトリの`AGENTS.md`も読んでください。作業履歴、一時的な審査状態、個人環境の絶対パスをこのファイルへ書き込まないでください。
 
+文書は想定読者が必要とする情報だけを記載します。README.mdは拡張の利用者向けに機能・動作環境・インストール・使い方・トラブルシューティングに限定し、開発・CIの説明はこのガイドに記載します。許諾未確認という状態の追跡文書や、それを理由とする公開ガードは追加しません。
+
 ## コード構成
 
 | ファイル | 役割 |
 | --- | --- |
 | `__init__.py` | ノードの登録情報と`WEB_DIRECTORY`をComfyUIへ公開 |
 | `nodes.py` | Model Loader・Score・Captionの入出力、画像変換、スコア表示、PNG保存 |
-| `backend.py` | モデル探索と検証、ComfyUIのGPUメモリ退避、専用プロセスの実行・キャンセル・後片付け |
-| `backend_hpsv3.py` | HPSv3用のモデル探索・検証・取得と専用プロセスの制御 |
-| `worker.py` | 専用Python環境で推論を実行し、結果と警告をJSONで返す |
-| `worker_hpsv3.py` | HPSv3の専用環境でScore・Captionを実行 |
-| `download_model.py` | 専用Python環境で標準モデルの最新の`main`を取得 |
-| `install.py` | 固定したサブモジュールの取得と、uvによる専用環境のセットアップ |
+| `backend.py` | HPSv3++モデル探索・検証・取得、GPUメモリ退避、ホスト内推論の制御 |
+| `backend_hpsv3.py` | HPSv3モデル探索・検証・取得、ホスト内推論の制御 |
+| `inference.py` | 推論ライブラリの呼び出し、ComfyUIキャンセルとGPUメモリ管理 |
+| `third_party/hpsv3-4bit/src/hpsv3_4bit/` | モデルロード・報酬モデル・Score・Captionの編集元 |
+| `_vendor/hpsv3_4bit/` | 固定コミットから生成した配布用推論パッケージ（直接編集禁止） |
+| `scripts/vendor_runtime.py` | 推論パッケージの生成とソース一致検証（開発時のみ） |
 | `web/filename_prefix.js` | キュー送信時のファイル名・日付置換 |
-| `tests/test_backend.py` | モデル検証、プロセス制御、オフライン設定、workerの契約を検証 |
+| `tests/test_backend.py` | モデル検証、ホスト内推論、キャンセルと入力契約を検証 |
 | `tests/test_nodes.py` | 画像とプロンプトの対応、PNG表示・メタデータ、出力形式を検証 |
 | `examples/caption_and_score.json` | CaptionからScoreにつなぐサンプルワークフロー |
-| `third_party/hpsv3-4bit` | 推論ラッパーを提供する固定Gitサブモジュール |
+| `requirements.txt` | ホスト環境へ導入する推論依存関係 |
 
-Model Loaderは標準モデルが未配置なら取得し、モデル名を保持する設定オブジェクトを返します。実際の重みはScore・Captionの実行時に別プロセスで読み込みます。画像PNGとリクエストJSONを一時ディレクトリへ書き、`worker.py`の結果JSONを親プロセスで受け取る構成です。
+Model Loaderは標準モデルが未配置なら取得し、モデル名を保持する設定オブジェクトを返します。Score・CaptionはComfyUIプロセス内で、同梱した推論ライブラリとローカルsafetensorsモデルを使って推論します。Managerのインストール段階では、HPSv3++互換ソースを固定コミットのレビュー済みHTTPSファイルとして取得し、SHA-256検証後に`~/.cache/hpsv3-4bit/upstream/<commit>`へ保存します。実行時のランタイムはGit・pip・子プロセスを使いません。
 
 ## 環境とツール
 
-- Pythonの実行と依存関係管理にはuvを使います。JavaScript関連のツールが必要な場合はBun・bunxを使い、不要な`package.json`やロックファイルを追加しないでください。
-- 拡張本体のPython要件は`pyproject.toml`、推論環境の依存関係はサブモジュールの`hpsv3pp/pyproject.toml`と`uv.lock`が管理します。`install.py`は拡張直下の`.venv`へPython 3.12の推論環境を構築します。
-- ComfyUI本体のPyTorch・Transformersを置き換えたり、重い推論依存関係を拡張本体の`requirements.txt`へ移したりしないでください。`requirements.txt`と本体の`project.dependencies`は整合させてください。
+- Pythonの実行と依存関係管理にはComfyUIのホスト環境を使います。JavaScript関連のツールが必要な場合はBun・bunxを使い、不要な`package.json`やロックファイルを追加しないでください。
+- 拡張本体とホスト推論依存関係は`pyproject.toml`と`requirements.txt`で管理します。PyTorch・torchvisionはComfyUIが提供するものを使用します。
+- ComfyUI本体のPyTorch・torchvisionを置き換えないでください。Transformers、Hugging Face Hub、Accelerate、bitsandbytes、safetensorsは`requirements.txt`と`project.dependencies`で整合させます。
 - 推論にはBF16対応のNVIDIA CUDA GPUと対応ドライバーが必要です。具体的な環境条件はREADMEと固定依存先を確認してください。
-- HPSv3は`hpsv3/pyproject.toml`と`uv.lock`に従って`.venv-hpsv3`へセットアップします。HPSv3++の`.venv`とはTransformersの要件が異なるため、統合しないでください。モデル配置先・登録名は`hpsv3`、接続型は`HPSV3_MODEL`です。
+- HPSv3はQwen2-VL、HPSv3++はQwen3-VLです。モデル配置先・登録名はそれぞれ`hpsv3`と`hpsv3pp`、接続型は`HPSV3_MODEL`と`HPSV3PP_MODEL`です。
 
-以下のコマンドは拡張のルートで実行します。初回セットアップはPython・依存パッケージをダウンロードしますが、モデル重みは取得しません。
-
-```sh
-uv run --no-project python install.py
-```
-
+依存関係はManagerまたはComfyUIのホストPython環境へ導入します。モデル重みはこの段階では取得しません。
 モデルの配置・取得はREADMEに従います。既存環境が使える場合、テストのためだけにインストールをやり直さないでください。
 
 ## 維持する動作
 
-- ComfyUIプロセスには推論ラッパーを直接importせず、`worker.py`を専用環境で起動します。処理ごとの読み込み・終了によるVRAM解放を維持してください。
-- 推論はローカルモデルを使い、オフライン設定と`local_files_only=True`を維持します。標準モデルが未配置の場合のみModel Loaderが専用プロセスで取得します。Score・Captionの推論中にモデルを取得したり、ノード実行中にパッケージをインストールしたりしないでください。
+- ComfyUIプロセス内で推論を行います。推論ライブラリは通常のPython importで再利用し、モデル読み込み前後のGPUメモリ退避・解放を維持してください。
+- 推論はローカルモデルを使い、`local_files_only=True`と`trust_remote_code=False`を維持します。標準モデルが未配置の場合のみModel LoaderがHugging Faceから取得します。Score・Captionの推論中にモデルを取得したり、ノード実行中にパッケージをインストールしたりしないでください。
 - モデル名は登録済み`hpsv3pp`ディレクトリ内で解決します。絶対パス、親ディレクトリへの脱出、NF4設定不備、不完全なモデルの検証を省略しないでください。
-- 成功・失敗・キャンセルのいずれでも子プロセスと推論用一時ファイルを片付けます。モデル取得の途中データは再試行用として保持できますが、取得と検証が完了するまでモデルとして使用しません。ComfyUIのキャンセル確認と推論前のGPUメモリ退避を維持してください。
+- 成功・失敗・キャンセルのいずれでもモデル取得の途中データを安全に扱います。取得と検証が完了するまでモデルとして使用しません。ComfyUIのキャンセル確認と推論前後のGPUメモリ退避を維持してください。
 - HPSv3++の評価値はバッチ構成の影響を受けます。Scoreは常に画像・プロンプトの組を1件ずつ、`iter_step=0.0`で評価します。高速化のためにまとめて評価すると意味が変わります。
 - Scoreの`INPUT_IS_LIST`、各ノードの`OUTPUT_IS_LIST`とIMAGEバッチは別の概念です。入力順、単一プロンプトの全画像への適用、画像数とプロンプト数の検証、画像ごとの出力を維持してください。
 - 保存前にスコア件数と有限値を確認します。Captionは画像ごとに空でない文字列を返します。
@@ -65,24 +62,21 @@ uv run --no-project python install.py
 
 ## 検証
 
-セットアップ済みの専用環境で、既存の単体テストを実行できます。
-
+ComfyUIのホストPython環境で、既存の単体テストを実行できます。
 ```sh
-uv run --no-project --python .venv python -m unittest discover -s tests -v
+uv run --no-project --python <ComfyUI Python> python -m unittest discover -s tests -v
 git diff --check
 ```
 
-これらのテストはComfyUIや推論部分をモックしています。PyTorch・Pillowなどは必要ですが、モデル重みやGPUによる実推論は不要です。テスト成功だけで実際のモデル読み込み、GPU互換性、ブラウザー表示を検証したとは報告しないでください。
-
-推論やプロセス制御を変更した場合は、可能なら実際のComfyUIでサンプルワークフローを実行し、有限なスコア、空でないCaption、複数画像の順序、キャンセル後のプロセス終了を確認します。保存処理の変更では各保存モードとメタデータ無効時の挙動、フロントエンド変更ではファイル名置換も確認します。GPU・モデルが利用できない場合は、その検証が未実施であることを明記してください。
+推論やプロセス制御を変更した場合は、可能なら実際のComfyUIでサンプルワークフローを実行し、有限なスコア、空でないCaption、複数画像の順序、キャンセル後のモデル解放を確認します。保存処理の変更では各保存モードとメタデータ無効時の挙動、フロントエンド変更ではファイル名置換も確認します。GPU・モデルが利用できない場合は、その検証が未実施であることを明記してください。
 
 文書だけの変更はリンク・コマンド・実装との整合性を確認すれば十分です。不要なテスト追加やGPU実行は行いません。
 
 ## 依存先とライセンス
 
-- サブモジュールの実装を拡張本体へコピーしないでください。互換性対応はまず拡張側のラッパーで行い、依存先自体の変更が必要ならそのリポジトリで変更・検証します。
-- 依存先を更新する場合は、Gitのサブモジュール参照と`install.py`の`UPSTREAM_COMMIT`を同じコミットへ更新します。Git clone経由とRegistryのZIP経由の両方で、同じ依存先を取得できることを確認してください。
-- 拡張自身のMITライセンスと、依存先コード・モデル重みの条件を分けて扱います。固定したHPSv3++上流実装のライセンス未確認という制約は`THIRD_PARTY_NOTICES.md`を参照してください。サブモジュール参照やRegistryへの登録は許諾を補うものではありません。
+- 推論実装とモデル互換性対応は`hpsv3-4bit`側へ集約し、拡張側で報酬モデルを重複実装しないでください。依存コードの取得・梱包は開発・ビルド時に行い、実行時には取得済みライブラリを通常importします。配布するコードの出典・固定リビジョン・利用条件を確認してください。
+- 依存関係やモデル形式を更新する場合は、ホスト環境・RegistryのZIP・手動配置の経路が一致することを確認してください。
+- 同梱する第三者コードのライセンス本文・著作権表示を維持します。拡張自身のMITライセンスと、依存先コード・モデル重みの条件を分けて扱います。
 - 重み、データセット、個人画像、プロンプト入りの結果、ログ、APIキー、仮想環境をGitへ追加しないでください。依存先の更新時はライセンス表記と配布内容も確認します。
 
 ## Registry公開
@@ -90,5 +84,5 @@ git diff --check
 - Publisher IDは`stella`です。APIキーはGitHubのRepository Secret `REGISTRY_ACCESS_TOKEN`だけに保存し、コードやログに出さないでください。
 - 現在の`.github/workflows/publish.yml`は、`main`へのpushで`pyproject.toml`が変更されると公開処理を実行します。バージョン以外の編集でも起動する点に注意してください。開発中の編集は作業用ブランチで進め、公開時に未使用のバージョン番号へ更新します。
 - Registryの既存バージョンを上書きする前提で作業しないでください。GitHub Actionsの成功はアップロード成功であり、Registry側の処理完了とは別です。
-- 配布設定や依存先を変更した場合は、`uvx --from comfy-cli==1.20.0 comfy node validate`と`uvx --from comfy-cli==1.20.0 comfy node pack`を実行し、生成した`node.zip`の中身を確認します。`.comfyignore`による`third_party/`などの除外を維持し、上流コード・ローカル環境・機密情報を同梱しないでください。
+- 配布設定や依存先を変更した場合は、`uvx --from comfy-cli==1.20.0 comfy node validate`と`uvx --from comfy-cli==1.20.0 comfy node pack`を実行し、生成した`node.zip`の中身を確認します。`.comfyignore`による`third_party/`などの除外を維持し、配布用に生成した`_vendor/hpsv3_4bit/`と必要なライセンス本文・著作権表示を含めます。学習・変換ツール、ローカル環境、機密情報は同梱しません。公開前に依存元コミットがリモートから取得できることを確認してください。
 - 通常のコード・文書編集とリリースを区別し、依頼された作業範囲に公開が含まれている場合に公開手順を実行します。
