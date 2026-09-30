@@ -49,20 +49,10 @@ def _has_link(path: Path) -> bool:
 
 
 def _safe_file(root: Path, relative: str) -> Path | None:
-    root = root.resolve()
-    path = root / relative
-    try:
-        resolved = path.resolve(strict=True)
-    except OSError:
+    path = root.resolve() / relative
+    if not path.is_file() or _has_link(path):
         return None
-    if not resolved.is_relative_to(root) or not resolved.is_file() or path.is_symlink():
-        return None
-    current = path
-    while current != root:
-        if current.is_symlink() or current.is_junction():
-            return None
-        current = current.parent
-    return resolved
+    return path
 
 
 def _valid_root(root: Path) -> bool:
@@ -86,22 +76,20 @@ def _bounded_bytes(path: Path, limit: int) -> bytes | None:
     return None
 
 
-def _sha256(path: Path, limit: int) -> str:
-    digest = hashlib.sha256()
-    raw = _bounded_bytes(path, limit)
-    if raw is None:
-        return ""
-    # Normalize after reading the bounded file so CRLF pairs split across
+def _digest(raw: bytes) -> str:
+    # Normalize the whole bounded file so CRLF pairs split across read
     # chunks cannot evade the fixed Git blob hash.
-    digest.update(raw.replace(b"\r\n", b"\n"))
-    return digest.hexdigest()
+    return hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
+
+
+def _sha256(path: Path, limit: int) -> str:
+    raw = _bounded_bytes(path, limit)
+    return "" if raw is None else _digest(raw)
 
 
 def _local_source(source_directory: str | Path | None = None) -> Path | None:
-    for candidate in (_source_root(_cache_base(source_directory)),):
-        if _valid_root(candidate):
-            return candidate
-    return None
+    candidate = _source_root(_cache_base(source_directory))
+    return candidate if _valid_root(candidate) else None
 
 
 def _download(relative: str, destination: Path) -> None:
@@ -122,31 +110,11 @@ def _download(relative: str, destination: Path) -> None:
                 if total > limit:
                     raise SourceProvisionError(f"reviewed source file is too large: {relative}")
                 handle.write(block)
-    except SourceProvisionError:
-        raise
     except HTTPError as exc:
         headers = exc.headers or {}
-        retry_after = headers.get("Retry-After")
-        reset = headers.get("X-RateLimit-Reset")
-        remaining = headers.get("X-RateLimit-Remaining")
-        is_rate_limit = exc.code == 429 or (exc.code == 403 and (retry_after or remaining == "0"))
-        if is_rate_limit:
-            hint = []
-            if retry_after:
-                hint.append(f"Retry-After={retry_after}")
-            if reset:
-                hint.append(f"X-RateLimit-Reset={reset}")
-            suffix = f" ({', '.join(hint)})" if hint else ""
-            raise SourceProvisionError(
-                f"GitHub Contents API rate limit response for reviewed source ({relative}): "
-                f"HTTP {exc.code}{suffix}. Wait for the limit to reset before retrying. {_REPAIR}"
-            ) from exc
-        if exc.code == 403:
-            raise SourceProvisionError(
-                f"GitHub Contents API access denied for reviewed source ({relative}): HTTP 403. {_REPAIR}"
-            ) from exc
+        hints = "".join(f", {name}={headers[name]}" for name in ("Retry-After", "X-RateLimit-Reset") if headers.get(name))
         raise SourceProvisionError(
-            f"GitHub Contents API request failed for reviewed source ({relative}): HTTP {exc.code}"
+            f"GitHub Contents API request failed for reviewed source ({relative}): HTTP {exc.code}{hints}. {_REPAIR}"
         ) from exc
     except (OSError, URLError) as exc:
         raise SourceProvisionError(f"could not fetch reviewed HPSv3++ source ({relative}): {exc}") from exc
@@ -163,11 +131,10 @@ def ensure_source(local_files_only: bool = False, *, source_directory: str | Pat
         raise SourceProvisionError(
             f"Validated HPSv3++ source is unavailable in offline mode. {_REPAIR}"
         )
-    base = _cache_base(source_directory).expanduser()
+    base = _cache_base(source_directory)
     if _has_link(base):
         raise SourceProvisionError(f"source cache must not be a symlink: {base}")
     base = base.resolve()
-    base.parent.mkdir(parents=True, exist_ok=True)
     base.mkdir(parents=True, exist_ok=True)
     target = _source_root(base)
     if _has_link(target):
@@ -219,7 +186,7 @@ def _validated_file(source: Path, relative: str) -> tuple[Path, bytes]:
     path = _safe_file(source, relative)
     digest, limit = _FILES[relative]
     raw = _bounded_bytes(path, limit) if path is not None else None
-    if raw is None or hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest() != digest:
+    if raw is None or _digest(raw) != digest:
         raise SourceProvisionError(f"reviewed HPSv3++ source changed or escaped its cache: {relative}")
     return path, raw
 
@@ -234,14 +201,12 @@ def load_model_module(source_directory: str | Path | None = None) -> ModuleType:
         def get_code(self, fullname):
             digest, limit = _FILES["hpsv3/model/qwen3vl_rm.py"]
             source = _bounded_bytes(Path(self.path), limit)
-            if source is None or hashlib.sha256(source.replace(b"\r\n", b"\n")).hexdigest() != digest:
+            if source is None or _digest(source) != digest:
                 raise SourceProvisionError("reviewed HPSv3++ model source changed while loading")
             return self.source_to_code(source, self.path)
 
     loader = _ReviewedSourceLoader(name, str(path))
     spec = importlib.util.spec_from_file_location(name, path, loader=loader)
-    if spec is None or spec.loader is None:
-        raise SourceProvisionError("could not construct a loader for reviewed HPSv3++ source")
     module = importlib.util.module_from_spec(spec)
     previous = sys.modules.get(name)
     sys.modules[name] = module

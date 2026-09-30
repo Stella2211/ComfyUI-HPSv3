@@ -14,14 +14,13 @@
 | --- | --- |
 | `__init__.py` | ノードの登録情報と`WEB_DIRECTORY`をComfyUIへ公開 |
 | `nodes.py` | Model Loader・Score・Captionの入出力、画像変換、スコア表示、PNG保存 |
-| `backend.py` | HPSv3++モデル探索・検証・取得、GPUメモリ退避、ホスト内推論の制御 |
-| `backend_hpsv3.py` | HPSv3モデル探索・検証・取得、ホスト内推論の制御 |
+| `backend.py` | HPSv3・HPSv3++共通のモデル探索・検証・取得、ホスト内推論の制御 |
 | `inference.py` | 推論ライブラリの呼び出し、ComfyUIキャンセルとGPUメモリ管理 |
 | `third_party/hpsv3-4bit/src/hpsv3_4bit/` | モデルロード・報酬モデル・Score・Captionの編集元 |
 | `_vendor/hpsv3_4bit/` | 固定コミットから生成した配布用推論パッケージ（直接編集禁止） |
 | `scripts/vendor_runtime.py` | 推論パッケージの生成とソース一致検証（開発時のみ） |
 | `web/filename_prefix.js` | キュー送信時のファイル名・日付置換 |
-| `tests/test_backend.py` | モデル検証、ホスト内推論、キャンセルと入力契約を検証 |
+| `tests/test_backend.py` | 両モデルのモデル検証、取得、ホスト内推論の呼び出しを検証 |
 | `tests/test_nodes.py` | 画像とプロンプトの対応、PNG表示・メタデータ、出力形式を検証 |
 | `examples/caption_and_score.json` | CaptionからScoreにつなぐサンプルワークフロー |
 | `requirements.txt` | ホスト環境へ導入する推論依存関係 |

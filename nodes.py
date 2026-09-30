@@ -10,8 +10,7 @@ from PIL import Image, ImageDraw, ImageFont, PngImagePlugin
 import folder_paths
 from comfy.cli_args import args
 
-from .backend import HPSv3PPModel, list_models
-from .backend_hpsv3 import HPSv3Model, list_models as list_hpsv3_models
+from .backend import HPSv3Model, HPSv3PPModel
 
 
 def _single(value, name):
@@ -57,7 +56,7 @@ def _to_tensor(image):
     return torch.from_numpy(array).unsqueeze(0)
 
 
-def _banner(image, score, label_prefix="HPSv3++"):
+def _banner(image, score, label_prefix):
     width, height = image.size
     font = ImageFont.load_default(size=max(10, min(28, width // 32)))
     label = f"{label_prefix} score: {score:.4f}"
@@ -70,7 +69,7 @@ def _banner(image, score, label_prefix="HPSv3++"):
     return banner
 
 
-def _save(image, filename_prefix, score, prompt, model_name, mode, batch_number, workflow_prompt, extra_pnginfo, metadata_key="hpsv3pp"):
+def _save(image, filename_prefix, score, prompt, model_name, mode, batch_number, workflow_prompt, extra_pnginfo, metadata_key):
     output_dir = folder_paths.get_output_directory()
     full_dir, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
         filename_prefix, output_dir, image.width, image.height
@@ -96,7 +95,7 @@ def _save(image, filename_prefix, score, prompt, model_name, mode, batch_number,
 class HPSv3PPModelLoader:
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"model": (list_models(), {
+        return {"required": {"model": (HPSv3PPModel.list_models(), {
             "tooltip": "HPSv3-PlusPlus-bnb-NF4 downloads automatically from Hugging Face when missing (about 6.5 GB). Download progress appears in the ComfyUI console.",
         })}}
 
@@ -106,7 +105,7 @@ class HPSv3PPModelLoader:
     CATEGORY = "HPSv3++"
 
     def load(self, model):
-        return (HPSv3PPModel(_single(model, "model")),)
+        return (HPSv3PPModel(model),)
 
 
 class HPSv3PPScore:
@@ -138,8 +137,6 @@ class HPSv3PPScore:
         model = _single(model, "model")
         score_mode = _single(score_mode, "score_mode")
         filename_prefix = _single(filename_prefix, "filename_prefix")
-        if score_mode not in ("banner", "metadata", "both"):
-            raise ValueError("score_mode must be banner, metadata, or both")
         if score_mode in ("metadata", "both") and args.disable_metadata:
             raise ValueError("Metadata is disabled. Select banner mode or remove --disable-metadata.")
         image_tensors = _images(images)
@@ -163,13 +160,17 @@ class HPSv3PPScore:
         ui_images = []
         for i, (image, score, text) in enumerate(zip(rendered, scores, prompts)):
             ui_images.append(_save(image, filename_prefix, score, text, model.model_name, score_mode, i, workflow_prompt, extra_pnginfo, self.METADATA_KEY))
-        return {"ui": {"images": ui_images}, "result": ([_to_tensor(image) for image in rendered], scores)}
+        if score_mode == "metadata":
+            output_images = [image.unsqueeze(0) for image in image_tensors]
+        else:
+            output_images = [_to_tensor(image) for image in rendered]
+        return {"ui": {"images": ui_images}, "result": (output_images, scores)}
 
 
 class HPSv3ModelLoader:
     @classmethod
     def INPUT_TYPES(cls):
-        return {"required": {"model": (list_hpsv3_models(), {
+        return {"required": {"model": (HPSv3Model.list_models(), {
             "default": "HPSv3-bnb-NF4",
             "tooltip": "HPSv3-bnb-NF4 downloads automatically from Hugging Face when missing (about 5.9 GB). Download progress appears in the ComfyUI console.",
         })}}
@@ -180,7 +181,7 @@ class HPSv3ModelLoader:
     CATEGORY = "HPSv3"
 
     def load(self, model):
-        return (HPSv3Model(_single(model, "model")),)
+        return (HPSv3Model(model),)
 
 
 class HPSv3Score(HPSv3PPScore):
@@ -213,11 +214,7 @@ class HPSv3PPCaption:
         }}
 
     def caption(self, model, images, max_new_tokens=96):
-        model = _single(model, "model")
-        max_new_tokens = int(_single(max_new_tokens, "max_new_tokens"))
-        if not 16 <= max_new_tokens <= 512:
-            raise ValueError("max_new_tokens must be between 16 and 512.")
-        pil_images = [_to_pil(image) for image in _images(images)]
+        pil_images = [_to_pil(image) for image in images]
         if not pil_images:
             raise ValueError("Provide at least one image.")
         captions = model.caption(pil_images, max_new_tokens)
