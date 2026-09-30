@@ -148,12 +148,12 @@ class HPSv3Model:
         raise FileNotFoundError(f"No {cls.label} model found. Place the complete NF4 model in models/{cls.family} and refresh the model list.")
 
     def score(self, images, prompts):
-        return self._run("score", images, prompts, 96)
+        return self._run("score", images, prompts=prompts)
 
     def caption(self, images, max_new_tokens):
-        return self._run("caption", images, [], max_new_tokens)
+        return self._run("caption", images, max_new_tokens=max_new_tokens)
 
-    def _run(self, operation, images, prompts, max_new_tokens):
+    def _run(self, operation, images, prompts=(), max_new_tokens=96):
         model_path = self.resolve(self.model_name)
         device = model_management.get_torch_device()
         if device.type != "cuda" or torch.version.hip is not None:
