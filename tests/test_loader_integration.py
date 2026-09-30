@@ -29,12 +29,15 @@ class LoaderIntegrationTests(unittest.TestCase):
         cli_args.args = types.SimpleNamespace(disable_metadata=False)
         package = types.ModuleType("hpsv3_loader_integration")
         package.__path__ = [str(ROOT)]
+        inference = types.ModuleType(f"{package.__name__}.inference")
+        inference.run_inference = mock.Mock()
         modules = mock.patch.dict(sys.modules, {
             "folder_paths": folder_paths,
             "comfy": comfy,
             "comfy.model_management": comfy.model_management,
             "comfy.cli_args": cli_args,
             package.__name__: package,
+            inference.__name__: inference,
         })
         modules.start()
         self.addCleanup(modules.stop)
@@ -66,9 +69,9 @@ class LoaderIntegrationTests(unittest.TestCase):
             return model_path
 
         loader = self.nodes.HPSv3PPModelLoader()
-        with mock.patch.object(self.backend, "_download_default_model", side_effect=download) as downloader:
+        with mock.patch.object(self.backend.HPSv3PPModel, "_download_default_model", side_effect=download) as downloader:
             first, = loader.load(name)
-            second, = loader.load([name])
+            second, = loader.load(name)
         downloader.assert_called_once()
         self.assertEqual(loader.RETURN_TYPES, ("HPSV3PP_MODEL",))
         self.assertIsInstance(first, self.backend.HPSv3PPModel)

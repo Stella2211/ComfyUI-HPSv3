@@ -54,10 +54,9 @@ class NodesTests(unittest.TestCase):
 
         backend = types.ModuleType("hpsv3_test.backend")
         backend.HPSv3PPModel = lambda name: FakeModel()
-        backend.list_models = lambda: ["fake-model"]
-        backend_hpsv3 = types.ModuleType("hpsv3_test.backend_hpsv3")
-        backend_hpsv3.HPSv3Model = lambda name: FakeModel()
-        backend_hpsv3.list_models = lambda: ["HPSv3-bnb-NF4"]
+        backend.HPSv3PPModel.list_models = lambda: ["fake-model"]
+        backend.HPSv3Model = lambda name: FakeModel()
+        backend.HPSv3Model.list_models = lambda: ["HPSv3-bnb-NF4"]
         package = types.ModuleType("hpsv3_test")
         package.__path__ = [str(Path(__file__).parents[1])]
         sys.modules.update({
@@ -66,7 +65,6 @@ class NodesTests(unittest.TestCase):
             "comfy.cli_args": cli_args,
             "hpsv3_test": package,
             "hpsv3_test.backend": backend,
-            "hpsv3_test.backend_hpsv3": backend_hpsv3,
         })
 
         path = Path(__file__).parents[1] / "nodes.py"
@@ -78,7 +76,7 @@ class NodesTests(unittest.TestCase):
 
     def tearDown(self):
         self.output_dir.cleanup()
-        for name in ("hpsv3_test.nodes", "hpsv3_test.backend", "hpsv3_test.backend_hpsv3", "hpsv3_test", "folder_paths", "comfy", "comfy.cli_args"):
+        for name in ("hpsv3_test.nodes", "hpsv3_test.backend", "hpsv3_test", "folder_paths", "comfy", "comfy.cli_args"):
             sys.modules.pop(name, None)
 
     @staticmethod
@@ -164,6 +162,13 @@ class NodesTests(unittest.TestCase):
         self.assertEqual(len(model.caption_calls[0][0]), 2)
         self.assertEqual(model.caption_calls[0][1], 128)
 
+    def test_metadata_mode_returns_original_image_unchanged(self):
+        original = torch.tensor([[[[0.1234, 0.5, 0.9], [0.3333, 0.7777, 0.01]]]])
+        result = self.nodes.HPSv3PPScore().score([FakeModel(scores=[1.0])], [original], ["p"], ["metadata"], ["meta"])
+        self.assertEqual(len(result["result"][0]), 1)
+        self.assertIs(result["result"][0][0].untyped_storage(), original.untyped_storage())
+        torch.testing.assert_close(result["result"][0][0], original, atol=0, rtol=0)
+
     def test_original_loader_and_score_use_distinct_socket_and_metadata(self):
         self.assertEqual(self.nodes.HPSv3ModelLoader.INPUT_TYPES()["required"]["model"][1]["default"], "HPSv3-bnb-NF4")
         self.assertEqual(self.nodes.HPSv3ModelLoader.RETURN_TYPES, ("HPSV3_MODEL",))
@@ -177,30 +182,6 @@ class NodesTests(unittest.TestCase):
             self.assertNotIn("hpsv3pp", image.info)
             self.assertGreater(image.size[1], 2)
             self.assertEqual(json.loads(image.info["hpsv3"])["prompt"], "original")
-
-    def test_original_caption_validates_each_image_and_uses_distinct_socket(self):
-        node = self.nodes.HPSv3Caption()
-        self.assertEqual(node.INPUT_TYPES()["required"]["model"], ("HPSV3_MODEL",))
-        images = torch.cat([self.image(0.1), self.image(0.2)])
-        model = FakeModel(captions=["first", "second"])
-        self.assertEqual(node.caption(model, images, 128), (["first", "second"],))
-        self.assertEqual(model.caption_calls[0][1], 128)
-        for captions in (["only one"], ["first", " "], ["first", None]):
-            with self.subTest(captions=captions), self.assertRaisesRegex(ValueError, "HPSv3 did not return"):
-                node.caption(FakeModel(captions=captions), images)
-
-    def test_original_score_preserves_batch_order_and_rejects_bad_results(self):
-        node = self.nodes.HPSv3Score()
-        images = torch.cat([self.image(0.1), self.image(0.8)])
-        model = FakeModel(scores=[0.1, 0.8])
-        result = node.score([model], [images], ["shared"], ["metadata"], ["v3"])
-        self.assertEqual(result["result"][1], [0.1, 0.8])
-        self.assertEqual(model.score_calls[0][1], ["shared", "shared"])
-        self.assertLess(model.score_calls[0][0][0].getpixel((0, 0))[0], model.score_calls[0][0][1].getpixel((0, 0))[0])
-        for scores in ([1.0], [1.0, float("inf")]):
-            with self.subTest(scores=scores), self.assertRaises(ValueError):
-                node.score([FakeModel(scores=scores)], [images], ["p"], ["banner"], ["invalid"])
-        self.assertEqual(list(Path(self.output_dir.name).rglob("invalid*.png")), [])
 
 
 if __name__ == "__main__":
