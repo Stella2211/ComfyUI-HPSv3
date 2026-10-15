@@ -7,6 +7,7 @@ tests/
 .github/
 scripts/
 docs/
+images/
 .gitmodules
 **/__pycache__/
 **/*.pyc
